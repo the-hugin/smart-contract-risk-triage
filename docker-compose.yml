@@ -1,0 +1,20 @@
+services:
+  scanner:
+    build:
+      context: .
+      dockerfile: Dockerfile.smart-contract-scanner
+    image: evm-risk-triage:local
+    volumes:
+      - ./runs:/runs
+      - ./input:/input:ro
+    command:
+      - "--chain-id"
+      - "${CHAIN_ID:-1}"
+      - "--limit"
+      - "${LIMIT:-5000}"
+      - "--run-dir"
+      - "/runs/${RUN_NAME:-eth-mainnet-5000}"
+      - "--delay-seconds"
+      - "${DELAY_SECONDS:-0.35}"
+      - "--critical-limit"
+      - "${CRITICAL_LIMIT:-500}"

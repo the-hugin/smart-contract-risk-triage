@@ -1,0 +1,12 @@
+[project]
+name = "evm-risk-triage"
+version = "0.1.0"
+description = "Passive EVM verified-source triage with funds-at-risk prioritization."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+authors = [{ name = "evm-risk-triage contributors" }]
+dependencies = []
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

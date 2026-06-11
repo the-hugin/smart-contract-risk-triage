@@ -1,0 +1,30 @@
+.venv/
+__pycache__/
+*.py[cod]
+
+# Local scan outputs can contain live contract addresses, source bundles, and
+# analyst notes. Keep them out of the public repository by default.
+runs/
+tmp/
+input/
+output/
+reports/
+evidence/
+*.log
+*.jsonl.gz
+
+# Secrets and local config.
+.env
+.env.*
+secrets/
+*.key
+*.pem
+*.p12
+*.pfx
+*.token
+
+# Editors and OS files.
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
