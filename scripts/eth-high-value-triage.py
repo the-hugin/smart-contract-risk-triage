@@ -268,6 +268,9 @@ def vuln_score(finding: dict[str, Any], precheck: dict[str, Any] | None) -> tupl
     if category in {"reentrancy", "accounting"}:
         score += 20
         notes.append("money_bug_class")
+    if category == "address-control":
+        score += 35
+        notes.append("critical_address_control")
     if category == "access-control" and MONEY_FUNCTION_RE.search(function):
         score += 12
         notes.append("money_function_name")

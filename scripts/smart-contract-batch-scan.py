@@ -91,6 +91,63 @@ ADMIN_NAMES = {
     "init",
 }
 
+CRITICAL_ADDRESS_FIELDS = {
+    "admin",
+    "asset",
+    "beacon",
+    "beneficiary",
+    "bridge",
+    "collector",
+    "controller",
+    "delegate",
+    "delegatecontract",
+    "factory",
+    "feecollector",
+    "feereceiver",
+    "feerecipient",
+    "forwarder",
+    "gateway",
+    "governance",
+    "guardian",
+    "implementation",
+    "impl",
+    "library",
+    "logic",
+    "manager",
+    "minter",
+    "operator",
+    "oracle",
+    "owner",
+    "permit2",
+    "poolmanager",
+    "priceoracle",
+    "recipient",
+    "returnaddress",
+    "router",
+    "spender",
+    "sweeper",
+    "token",
+    "treasury",
+    "trustedforwarder",
+    "underlying",
+    "upgrader",
+    "vault",
+    "walletlibrary",
+    "withdrawaladdress",
+}
+
+RECIPIENT_ADDRESS_PARAMETER_MARKERS = (
+    "beneficiary",
+    "dst",
+    "receiver",
+    "recipient",
+    "returnaddress",
+    "target",
+    "to",
+    "wallet",
+    "withdrawaladdress",
+)
+
 SOL_ACCESS_MARKERS = (
     "onlyOwner",
     "onlyRole",
@@ -332,6 +389,7 @@ class Finding:
             score += 30
         if self.category in {
             "access-control",
+            "address-control",
             "upgradeability",
             "reentrancy",
             "signature-replay",
@@ -2260,6 +2318,55 @@ def solidity_parameter_text(header: str, function_name: str) -> str | None:
     return match.group(1) if match else None
 
 
+def split_top_level_commas(text: str) -> list[str]:
+    parts: list[str] = []
+    start = 0
+    depth = 0
+    for index, char in enumerate(text):
+        if char in "([{":
+            depth += 1
+        elif char in ")]}" and depth:
+            depth -= 1
+        elif char == "," and depth == 0:
+            parts.append(text[start:index].strip())
+            start = index + 1
+    tail = text[start:].strip()
+    if tail:
+        parts.append(tail)
+    return parts
+
+
+def solidity_address_parameter_names(block: FunctionBlock) -> list[str]:
+    params = solidity_parameter_text(block.header, block.name)
+    if params is None:
+        return []
+    names: list[str] = []
+    for part in split_top_level_commas(params):
+        match = re.search(
+            r"\baddress(?:\s+payable)?(?:\s+(?:memory|calldata|storage))?\s+([A-Za-z_][A-Za-z0-9_]*)\b",
+            part,
+            flags=re.IGNORECASE,
+        )
+        if match:
+            names.append(match.group(1))
+    return names
+
+
+def critical_address_assignment(block: FunctionBlock) -> tuple[int, str, str] | None:
+    for line_no, line in block.lines:
+        clean = line.strip()
+        lowered = clean.lower()
+        if "=" not in lowered or "==" in lowered or "!=" in lowered or ">=" in lowered or "<=" in lowered:
+            continue
+        for field in sorted(CRITICAL_ADDRESS_FIELDS, key=len, reverse=True):
+            escaped = re.escape(field)
+            if re.search(rf"\baddress(?:\s+payable)?\s+{escaped}\s*=", lowered):
+                continue
+            if re.search(rf"(?<![A-Za-z0-9_]){escaped}(?![A-Za-z0-9_])\s*=(?!=)", lowered):
+                return line_no, field, clean
+    return None
+
+
 def solidity_has_no_parameters(block: FunctionBlock) -> bool:
     params = solidity_parameter_text(block.header, block.name)
     return params is not None and re.sub(r"\s+", "", params) == ""
@@ -2293,6 +2400,18 @@ def transfer_routes_to_named_recipient(body: str, names: Iterable[str]) -> bool:
         if any(pattern in compact for pattern in patterns):
             return True
     return False
+
+
+def transfer_routes_to_address_parameter(block: FunctionBlock) -> tuple[str, ...]:
+    routed: list[str] = []
+    for name in solidity_address_parameter_names(block):
+        lowered = name.lower()
+        recipient_like = lowered in RECIPIENT_ADDRESS_PARAMETER_MARKERS or any(
+            marker in lowered for marker in RECIPIENT_ADDRESS_PARAMETER_MARKERS
+        )
+        if recipient_like and transfer_routes_to_named_recipient(block.body_text, (name,)):
+            routed.append(name)
+    return tuple(routed)
 
 
 def transfer_routes_to_caller(body: str) -> bool:
@@ -2901,6 +3020,8 @@ def scan_solidity_file(
         view_or_pure = is_view_or_pure_function(block)
         plain_storage_setter = is_plain_storage_setter(block)
         plain_storage_getter = is_plain_storage_getter(block)
+        critical_address_update = critical_address_assignment(block)
+        address_parameter_routes = transfer_routes_to_address_parameter(block)
         self_scoped_config = is_self_scoped_operator_or_metadata_config(block)
         low_priority_config = is_low_priority_public_config(block)
         keeper_incentive_flow = is_keeper_incentive_flow(block)
@@ -2909,6 +3030,24 @@ def scan_solidity_file(
         game_or_round_settlement_flow = is_game_or_round_settlement_flow(block)
         eoa_origin_only = tx_origin_is_eoa_gate_or_event(block)
         hook_tx_origin_attribution = tx_origin_is_hook_attribution(block, path_label)
+        address_parameter_route_guarded = any(
+            (
+                has_access_control,
+                has_self_guard,
+                payout_or_request_bound,
+                entrypoint_or_message_gated,
+                secret_or_commitment_gated_flow,
+                notary_commitment_flow,
+                cost_bound_payout,
+                recipient_or_approved_withdrawal,
+                user_funded_launchpad_flow,
+                user_funded_redemption_flow,
+                swap_aggregator_user_flow,
+                keeper_incentive_flow,
+                debt_backed_liquidation_flow,
+                game_or_round_settlement_flow,
+            )
+        )
         has_money_guard = has_access_control or (
             (has_self_guard or payout_or_request_bound) and not requires_admin_guard(block.name)
         ) or any(
@@ -2916,6 +3055,7 @@ def scan_solidity_file(
                 fixed_recipient_flow,
                 fixed_recipient_stream_claim,
                 fixed_recipient_stream_sweep,
+                bool(address_parameter_routes),
                 cost_bound_payout,
                 inbound_deposit_flow,
                 inbound_transfer_only_flow,
@@ -2969,6 +3109,106 @@ def scan_solidity_file(
                 safu_presale_cancel_guarded,
             )
         )
+
+        if (
+            public_like
+            and critical_address_update
+            and name_lower != "constructor"
+            and not view_or_pure
+            and not is_standard_token_function(block.name)
+        ):
+            line_no, field, evidence = critical_address_update
+            if non_runtime_bundle_source:
+                severity = "low"
+                confidence = "low"
+                funds_at_risk = False
+                signal = "Critical address assignment appears in a non-runtime Sourcify bundle source."
+                manual_check = "Confirm this file is inherited by the deployed runtime before escalating."
+            elif has_access_control:
+                severity = "medium"
+                confidence = "low"
+                funds_at_risk = False
+                signal = f"Guarded function can change critical address `{field}`."
+                manual_check = (
+                    "Confirm the current owner/admin/timelock and whether this address "
+                    "controls withdrawals, oracle pricing, routing, upgrades, or token custody."
+                )
+            else:
+                severity = "critical"
+                confidence = "medium"
+                funds_at_risk = True
+                signal = f"Public/external function can change critical address `{field}` without an obvious guard."
+                manual_check = (
+                    "Read current storage and confirm whether changing this address can "
+                    "redirect funds, swap routes, oracle prices, trusted forwarders, "
+                    "or implementation/admin control."
+                )
+            add_finding(
+                findings,
+                Finding(
+                    severity=severity,
+                    confidence=confidence,
+                    funds_at_risk=funds_at_risk,
+                    category="address-control",
+                    path=path_label,
+                    line=line_no,
+                    function=block.name,
+                    signal=signal,
+                    evidence=evidence,
+                    manual_check=manual_check,
+                ),
+            )
+
+        if (
+            public_like
+            and address_parameter_routes
+            and solidity_has_external_transfer(body)
+            and not view_or_pure
+            and not is_standard_token_function(block.name)
+            and not fixed_recipient_stream_claim
+            and not fixed_recipient_stream_sweep
+            and not recipient_or_approved_withdrawal
+        ):
+            routed = ", ".join(f"`{name}`" for name in address_parameter_routes)
+            if non_runtime_bundle_source:
+                severity = "low"
+                confidence = "low"
+                funds_at_risk = False
+                signal = "Recipient-parameter money route appears in a non-runtime Sourcify bundle source."
+                manual_check = "Confirm runtime reachability before treating this as redirectable custody."
+            elif address_parameter_route_guarded:
+                severity = "medium"
+                confidence = "low"
+                funds_at_risk = False
+                signal = f"Guarded money path can route funds to address parameter {routed}."
+                manual_check = (
+                    "Confirm caller/role/request ownership and whether the authorized caller "
+                    "can redirect protocol or user funds to an arbitrary address."
+                )
+            else:
+                severity = "critical"
+                confidence = "medium"
+                funds_at_risk = True
+                signal = f"Public/external money path can route funds to address parameter {routed}."
+                manual_check = (
+                    "Confirm whether any caller can choose the recipient and transfer "
+                    "contract-held native/token balances or user assets."
+                )
+            add_finding(
+                findings,
+                Finding(
+                    severity=severity,
+                    confidence=confidence,
+                    funds_at_risk=funds_at_risk,
+                    category="address-control",
+                    path=path_label,
+                    line=block.start_line,
+                    function=block.name,
+                    signal=signal,
+                    evidence=block.header,
+                    manual_check=manual_check,
+                ),
+            )
 
         if (
             public_like
@@ -3059,6 +3299,7 @@ def scan_solidity_file(
         if (
             public_like
             and admin_path
+            and not critical_address_update
             and not has_access_control
             and not view_or_pure
             and not is_standard_token_function(block.name)

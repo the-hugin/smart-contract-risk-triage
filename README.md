@@ -28,8 +28,8 @@ EVM:
 - Native and ERC20 balance filters.
 - Recent log activity filters.
 - Static source triage for withdraw, claim, redeem, sweep, rescue, payout,
-  reentrancy, init/upgrade, delegatecall, signature, oracle, and token-transfer
-  patterns.
+  recipient redirection, critical address replacement, reentrancy,
+  init/upgrade, delegatecall, signature, oracle, and token-transfer patterns.
 - Read-only prechecks for common false positives: EIP-1967 implementation or
   beacon slots, Gnosis Safe threshold, AMM pool state, and owner calls.
 - Config-driven monitors for Ethereum, Base, Arbitrum, Optimism, Polygon, BNB

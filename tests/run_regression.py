@@ -16,25 +16,38 @@ PRECHECK_DIR = ROOT / "tmp" / "regression-precheck"
 PRECHECK_OUT_DIR = ROOT / "tmp" / "regression-precheck-out"
 SCANNER = ROOT / "scripts" / "smart-contract-batch-scan.py"
 SOLANA_MONITOR = ROOT / "scripts" / "solana-program-monitor.py"
+ETH_HIGH_VALUE_TRIAGE = ROOT / "scripts" / "eth-high-value-triage.py"
 STREAM_PRECHECK_ADDRESS = "0x1111111111111111111111111111111111111111"
 
 EXPECTED_SEVERITY = {
-    "critical": 2,
-    "high": 2,
-    "medium": 16,
-    "low": 14,
+    "critical": 6,
+    "high": 1,
+    "medium": 20,
+    "low": 17,
     "info": 0,
 }
 
 EXPECTED_CRITICALS = {
     ("tests/fixtures/FinanceBank.sol", "Collect", "reentrancy"),
-    ("tests/fixtures/MockPoolManagerV12.sol", "take", "access-control"),
+    ("tests/fixtures/MockPoolManagerV12.sol", "take", "address-control"),
+    ("tests/fixtures/AddressSubstitution.sol", "setTreasury", "address-control"),
+    ("tests/fixtures/AddressSubstitution.sol", "configureOracle", "address-control"),
+    ("tests/fixtures/AddressSubstitution.sol", "withdrawTo", "address-control"),
+    ("tests/fixtures/AddressSubstitution.sol", "drainNative", "address-control"),
 }
 
 EXPECTED_STREAM_WATCHLIST = {
     ("initialize", "upgradeability"): ("medium", False),
     ("claim", "access-control"): ("low", False),
     ("sweepRemaining", "access-control"): ("medium", False),
+}
+
+EXPECTED_ADDRESS_CONTROL = {
+    ("tests/fixtures/AddressSubstitution.sol", "setTreasury"): ("critical", True),
+    ("tests/fixtures/AddressSubstitution.sol", "configureOracle"): ("critical", True),
+    ("tests/fixtures/AddressSubstitution.sol", "withdrawTo"): ("critical", True),
+    ("tests/fixtures/AddressSubstitution.sol", "drainNative"): ("critical", True),
+    ("tests/fixtures/AddressSubstitution.sol", "setRouter"): ("medium", False),
 }
 
 
@@ -103,6 +116,43 @@ def main() -> int:
     }
     if criticals != EXPECTED_CRITICALS:
         raise AssertionError(f"unexpected critical findings: {sorted(criticals)}")
+
+    address_control_rows = {
+        (normalized_path(row.get("path")), str(row.get("function"))): row
+        for row in findings
+        if row.get("category") == "address-control"
+    }
+    for key, expected in EXPECTED_ADDRESS_CONTROL.items():
+        row = address_control_rows.get(key)
+        if not row:
+            raise AssertionError(f"missing address-control finding: {key}")
+        severity, funds_at_risk = expected
+        if row.get("severity") != severity or row.get("funds_at_risk") is not funds_at_risk:
+            raise AssertionError(
+                f"bad address-control classification for {key}: "
+                f"severity={row.get('severity')} funds_at_risk={row.get('funds_at_risk')}"
+            )
+
+    eth_triage = load_module(ETH_HIGH_VALUE_TRIAGE, "eth_high_value_triage_regression")
+    address_control_row = address_control_rows[
+        ("tests/fixtures/AddressSubstitution.sol", "setTreasury")
+    ]
+    synthetic_live = {
+        "reasons": ["native_eth_balance"],
+        "nativeBalanceWei": str(3 * 10**17),
+        "recentLogCount": 1,
+        "majorTokenBalances": {},
+    }
+    score_parts = [
+        eth_triage.balance_score(synthetic_live),
+        eth_triage.vuln_score(address_control_row, None),
+    ]
+    score = sum(int(value) for value, _ in score_parts)
+    notes = [note for _, part_notes in score_parts for note in part_notes]
+    if eth_triage.classify(score, notes) != "triage-now":
+        raise AssertionError(
+            f"live-value address-control should be triage-now, got score={score} notes={notes}"
+        )
 
     stream_rows = {
         (str(row.get("function")), str(row.get("category"))): row
