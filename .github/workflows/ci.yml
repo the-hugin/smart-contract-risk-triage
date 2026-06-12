@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Python checks
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Compile scripts
+        run: |
+          python -m py_compile scripts/*.py tests/run_regression.py
+
+      - name: Run detector regression
+        run: |
+          python tests/run_regression.py
+
+      - name: Validate monitor configs
+        run: |
+          python scripts/evm-monitor-config.py list
+          python scripts/non-evm-monitor-config.py list
+          python scripts/evm-monitor-config.py systemd --out-dir tmp/systemd-evm --only ethereum --no-telegram
+          python scripts/non-evm-monitor-config.py systemd --out-dir tmp/systemd-non-evm --only solana --no-telegram
+
+      - name: Public repository sanity
+        run: |
+          python scripts/public-sanity-check.py

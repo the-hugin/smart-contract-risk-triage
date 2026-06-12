@@ -78,6 +78,8 @@ tests/
   run_regression.py
 ```
 
+See `ROADMAP.md` for the next chain families and detector work.
+
 ## Requirements
 
 - Python 3.11+
@@ -353,10 +355,13 @@ Mounted paths:
 
 ## Development
 
-Run this before changing detector logic:
+Run these before changing detector logic:
 
 ```bash
 python tests/run_regression.py
+python scripts/evm-monitor-config.py list
+python scripts/non-evm-monitor-config.py list
+python scripts/public-sanity-check.py
 ```
 
 Expected baseline:

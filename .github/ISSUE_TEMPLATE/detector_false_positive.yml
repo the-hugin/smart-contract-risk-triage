@@ -1,0 +1,42 @@
+name: Detector false positive
+description: Report a noisy finding so it can be downgraded or suppressed.
+title: "[false-positive] "
+labels: ["false positive"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Share only public or sanitized material. Do not include live exploit steps, secrets, private keys, cookies, or unresolved bounty evidence.
+  - type: textarea
+    id: finding
+    attributes:
+      label: Finding
+      description: Paste the relevant finding JSON or markdown excerpt.
+      render: json
+    validations:
+      required: true
+  - type: textarea
+    id: reason
+    attributes:
+      label: Why it is a false positive
+      description: Explain the guard, state precondition, runtime mismatch, fixed recipient, ownership check, or other reason.
+    validations:
+      required: true
+  - type: textarea
+    id: fixture
+    attributes:
+      label: Minimal fixture
+      description: A small synthetic Solidity, Vyper, Move, or transaction-shape example is preferred.
+      render: text
+    validations:
+      required: false
+  - type: dropdown
+    id: family
+    attributes:
+      label: Chain family
+      options:
+        - EVM
+        - Solana
+        - Other
+    validations:
+      required: true

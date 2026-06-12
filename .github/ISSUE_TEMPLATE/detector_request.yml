@@ -1,0 +1,38 @@
+name: Detector request
+description: Propose a new detector, precheck, chain module, or suppression rule.
+title: "[detector] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: pattern
+    attributes:
+      label: Pattern
+      description: What should the tool detect or suppress?
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: Review value
+      description: Why this changes funds-at-risk triage, false-positive rate, or monitor quality.
+    validations:
+      required: true
+  - type: textarea
+    id: safe_source
+    attributes:
+      label: Safe public example
+      description: Link to public source or provide a sanitized fixture. Do not paste unresolved private findings.
+    validations:
+      required: false
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options:
+        - funds-at-risk path
+        - false-positive reduction
+        - chain coverage
+        - output/reporting
+        - other
+    validations:
+      required: true

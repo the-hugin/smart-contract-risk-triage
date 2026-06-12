@@ -1,0 +1,53 @@
+name: Tool bug
+description: Report a bug in the scanner, monitor, config renderer, or output files.
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not paste secrets, authorization headers, private keys, cookies, or unresolved live-target findings.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What failed, and what did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command
+      description: Paste the exact local command if it is safe to share.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Output
+      description: Include the smallest useful error or output sample.
+      render: text
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - EVM static scanner
+        - EVM live filter
+        - EVM monitor config
+        - Solana monitor
+        - Docker
+        - Documentation
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      placeholder: "commit SHA, tag, or branch"
+    validations:
+      required: false
