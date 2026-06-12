@@ -242,6 +242,12 @@ def noise_score(finding: dict[str, Any], finding_path: str) -> tuple[int, list[s
     if "already consumed" in lowered:
         score -= 55
         notes.append("scanner_precheck_consumed")
+    if "fixed recipient" in lowered or "fixed return address" in lowered or "not the caller" in lowered:
+        score -= 35
+        notes.append("fixed_recipient_watchlist")
+    if "timestamp/state only" in lowered or "stream-initializer" in lowered:
+        score -= 35
+        notes.append("stream_initializer_watchlist")
     elif "requires live" in lowered or "requires implementation-slot precheck" in lowered:
         score -= 20
         notes.append("scanner_requires_precheck")
@@ -297,6 +303,8 @@ def classify(score: int, notes: list[str]) -> str:
             "safe_threshold_nonzero",
             "pool_initialized",
             "proxy_implementation_slot_nonzero",
+            "fixed_recipient_watchlist",
+            "stream_initializer_watchlist",
         }
     )
     if hard_noise and score < 165:

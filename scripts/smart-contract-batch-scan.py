@@ -394,7 +394,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         "--precheck-json",
         help=(
             "Optional read-only runtime precheck JSON keyed by contract address. "
-            "Used only to downgrade already-initialized Safe/pool signals."
+            "Used only to downgrade already-initialized Safe/pool/proxy/stream signals."
         ),
     )
     return parser.parse_args(argv)
@@ -441,6 +441,29 @@ def precheck_has_nonzero_address(precheck_state: dict[str, object] | None, key: 
         return False
     normalized = value.lower()
     return bool(re.fullmatch(r"0x[a-f0-9]{40}", normalized)) and int(normalized, 16) != 0
+
+
+def precheck_positive_int(precheck_state: dict[str, object] | None, key: str) -> int:
+    if not precheck_state:
+        return 0
+    value = precheck_state.get(key)
+    try:
+        return int(str(value), 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def precheck_truthy(precheck_state: dict[str, object] | None, key: str) -> bool:
+    if not precheck_state:
+        return False
+    value = precheck_state.get(key)
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    if isinstance(value, str):
+        return value.lower() in {"1", "true", "yes"}
+    return False
 
 
 def address_from_path_label(path_label: str) -> str | None:
@@ -2228,6 +2251,159 @@ def is_fixed_recipient_money_flow(block: FunctionBlock) -> bool:
     return contains_any(block.body_text, transfer_markers)
 
 
+def solidity_parameter_text(header: str, function_name: str) -> str | None:
+    match = re.search(
+        rf"\bfunction\s+{re.escape(function_name)}\s*\((.*?)\)",
+        header,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    return match.group(1) if match else None
+
+
+def solidity_has_no_parameters(block: FunctionBlock) -> bool:
+    params = solidity_parameter_text(block.header, block.name)
+    return params is not None and re.sub(r"\s+", "", params) == ""
+
+
+def solidity_declares_fixed_address(file_text: str, name: str) -> bool:
+    escaped = re.escape(name)
+    lowered = file_text.lower()
+    if re.search(rf"\baddress(?:\s+payable)?\s+(?:public\s+)?immutable\s+{escaped}\b", lowered):
+        return True
+    if re.search(rf"\b{escaped}\s*=\s*_[a-z0-9_]*{escaped}\b", lowered):
+        return True
+    return False
+
+
+def transfer_routes_to_named_recipient(body: str, names: Iterable[str]) -> bool:
+    compact = re.sub(r"\s+", "", body.lower())
+    for raw_name in names:
+        name = raw_name.lower()
+        patterns = (
+            f".transfer({name},",
+            f".safetransfer({name},",
+            f".transfer(payable({name})",
+            f"payable({name}).transfer(",
+            f"payable({name}).send(",
+            f"{name}.transfer(",
+            f"{name}.send(",
+            f"{name}.call{{value:",
+            f"payable({name}).call{{value:",
+        )
+        if any(pattern in compact for pattern in patterns):
+            return True
+    return False
+
+
+def transfer_routes_to_caller(body: str) -> bool:
+    compact = re.sub(r"\s+", "", body.lower())
+    caller_markers = (
+        ".transfer(msg.sender",
+        ".safetransfer(msg.sender",
+        ".transfer(_msgsender()",
+        ".safetransfer(_msgsender()",
+        "msg.sender.transfer(",
+        "msg.sender.send(",
+        "msg.sender.call{value:",
+        "payable(msg.sender).transfer(",
+        "payable(msg.sender).send(",
+        "payable(msg.sender).call{value:",
+    )
+    return any(marker in compact for marker in caller_markers)
+
+
+def is_fixed_recipient_stream_claim_flow(block: FunctionBlock, file_text: str) -> bool:
+    name = block.name.lower()
+    if "claim" not in name and "withdraw" not in name:
+        return False
+    lowered = block.body_text.lower()
+    if not solidity_has_external_transfer(block.body_text) or transfer_routes_to_caller(block.body_text):
+        return False
+    if not transfer_routes_to_named_recipient(block.body_text, ("recipient", "beneficiary")):
+        return False
+    if not (
+        solidity_declares_fixed_address(file_text, "recipient")
+        or solidity_declares_fixed_address(file_text, "beneficiary")
+    ):
+        return False
+    return any(
+        marker in lowered or marker in file_text.lower()
+        for marker in (
+            "stream",
+            "claimcooldown",
+            "lastclaimtimestamp",
+            "starttimestamp",
+            "vesting",
+            "recipient",
+        )
+    )
+
+
+def is_fixed_recipient_stream_sweep_flow(block: FunctionBlock, file_text: str) -> bool:
+    name = block.name.lower()
+    if "sweep" not in name and "remaining" not in name:
+        return False
+    lowered = block.body_text.lower()
+    if not solidity_has_external_transfer(block.body_text) or transfer_routes_to_caller(block.body_text):
+        return False
+    if not transfer_routes_to_named_recipient(block.body_text, ("returnaddress", "recipient", "beneficiary")):
+        return False
+    if not (
+        solidity_declares_fixed_address(file_text, "returnaddress")
+        or solidity_declares_fixed_address(file_text, "recipient")
+        or solidity_declares_fixed_address(file_text, "beneficiary")
+    ):
+        return False
+    return any(
+        marker in lowered or marker in file_text.lower()
+        for marker in (
+            "sweepcooldown",
+            "streamduration",
+            "streamend",
+            "minimumnoticeperiod",
+            "starttimestamp",
+            "vesting",
+        )
+    )
+
+
+def is_paramless_stream_initializer(block: FunctionBlock, file_text: str) -> bool:
+    if block.name.lower() not in {"initialize", "init"} or not solidity_has_no_parameters(block):
+        return False
+    lowered = block.body_text.lower()
+    if not any(marker in lowered for marker in ("starttimestamp", "lastclaimtimestamp", "initialized", "state")):
+        return False
+    if any(marker in lowered for marker in ("delegatecall", "selfdestruct")):
+        return False
+    if transfer_routes_to_caller(block.body_text):
+        return False
+    if re.search(
+        r"\b(owner|admin|recipient|returnaddress|treasury|oracle|implementation|factory|token)\s*=",
+        lowered,
+    ):
+        return False
+    stream_markers = (
+        "stream",
+        "claimcooldown",
+        "sweepcooldown",
+        "streamduration",
+        "minimumnoticeperiod",
+        "lastclaimtimestamp",
+        "starttimestamp",
+        "vesting",
+    )
+    return any(marker in lowered or marker in file_text.lower() for marker in stream_markers)
+
+
+def precheck_stream_initializer_consumed(precheck_state: dict[str, object] | None) -> bool:
+    return (
+        precheck_positive_int(precheck_state, "startTimestamp") > 0
+        or precheck_positive_int(precheck_state, "lastClaimTimestamp") > 0
+        or precheck_truthy(precheck_state, "initialized")
+        or precheck_truthy(precheck_state, "isInitialized")
+    )
+
+
 def is_keeper_incentive_flow(block: FunctionBlock) -> bool:
     lowered = block.body_text.lower()
     if not (
@@ -2625,6 +2801,9 @@ def scan_solidity_file(
         has_self_guard = solidity_has_self_accounting_guard(block)
         payout_or_request_bound = is_payout_or_request_bound(body)
         fixed_recipient_flow = is_fixed_recipient_money_flow(block)
+        fixed_recipient_stream_claim = is_fixed_recipient_stream_claim_flow(block, text)
+        fixed_recipient_stream_sweep = is_fixed_recipient_stream_sweep_flow(block, text)
+        paramless_stream_initializer = is_paramless_stream_initializer(block, text)
         cost_bound_payout = is_cost_bound_payout(block)
         inbound_deposit_flow = is_inbound_deposit_flow(block)
         inbound_transfer_only_flow = is_inbound_transfer_only_flow(block)
@@ -2735,6 +2914,8 @@ def scan_solidity_file(
         ) or any(
             (
                 fixed_recipient_flow,
+                fixed_recipient_stream_claim,
+                fixed_recipient_stream_sweep,
                 cost_bound_payout,
                 inbound_deposit_flow,
                 inbound_transfer_only_flow,
@@ -2848,6 +3029,30 @@ def scan_solidity_file(
                     signal=signal,
                     evidence=block.header,
                     manual_check=manual_check,
+                ),
+            )
+
+        if public_like and (fixed_recipient_stream_claim or fixed_recipient_stream_sweep):
+            add_finding(
+                findings,
+                Finding(
+                    severity="medium" if fixed_recipient_stream_sweep else "low",
+                    confidence="low",
+                    funds_at_risk=False,
+                    category="access-control",
+                    path=path_label,
+                    line=block.start_line,
+                    function=block.name,
+                    signal=(
+                        "Public stream sweep sends remaining funds to a fixed return address after stream conditions."
+                        if fixed_recipient_stream_sweep
+                        else "Public claim sends accrued funds to a fixed recipient, not the caller."
+                    ),
+                    evidence=block.header,
+                    manual_check=(
+                        "Confirm runtime recipient/return address, stream end/cooldown state, "
+                        "and whether any caller can redirect funds to themselves."
+                    ),
                 ),
             )
 
@@ -3054,6 +3259,25 @@ def scan_solidity_file(
                         "Read factory/token0/token1/reserves or slot0 before escalating "
                         "as an uninitialized pool."
                     )
+                elif paramless_stream_initializer:
+                    if precheck_stream_initializer_consumed(precheck_state):
+                        severity = "low"
+                        confidence = "low"
+                        funds_at_risk = False
+                        signal = "Paramless stream initializer is already consumed by read-only stream-state precheck."
+                        manual_check = (
+                            "startTimestamp/lastClaimTimestamp or initialized getter is nonzero; "
+                            "keep as checked stream-initializer signal unless another path can reset state."
+                        )
+                    else:
+                        severity = "medium"
+                        confidence = "low"
+                        funds_at_risk = False
+                        signal = "Paramless stream initializer appears to set timestamp/state only."
+                        manual_check = (
+                            "Call startTimestamp()/initialized() read-only and confirm no recipient, "
+                            "token, owner, or return address can be set by the caller."
+                        )
                 elif non_runtime_bundle_source:
                     severity = "low"
                     confidence = "low"
@@ -3361,6 +3585,8 @@ def scan_solidity_file(
                 non_runtime_bundle_source
                 or standard_amm_function
                 or recipient_or_approved_withdrawal
+                or fixed_recipient_stream_claim
+                or fixed_recipient_stream_sweep
                 or user_funded_launchpad_flow
                 or hook_fee_callback_flow
                 or tax_or_router_maintenance_swap
@@ -3421,6 +3647,8 @@ def scan_solidity_file(
             token_transfer_guarded = (
                 has_money_guard
                 or fixed_recipient_flow
+                or fixed_recipient_stream_claim
+                or fixed_recipient_stream_sweep
                 or cost_bound_payout
                 or inbound_deposit_flow
                 or inbound_transfer_only_flow
@@ -3573,6 +3801,8 @@ def scan_solidity_file(
             view_or_pure
             or plain_storage_getter
             or fixed_recipient_flow
+            or fixed_recipient_stream_claim
+            or fixed_recipient_stream_sweep
             or keeper_incentive_flow
             or debt_backed_liquidation_flow
             or user_funded_redemption_flow
@@ -3666,6 +3896,8 @@ def scan_solidity_file(
             and not standard_amm_source
             and not (
                 fixed_recipient_flow
+                or fixed_recipient_stream_claim
+                or fixed_recipient_stream_sweep
                 or cost_bound_payout
                 or inbound_deposit_flow
                 or inbound_transfer_only_flow

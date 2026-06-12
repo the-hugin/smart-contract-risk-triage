@@ -28,6 +28,10 @@ EIP1967_BEACON_SLOT = "0xa3f0ad74e5423aebfd80d3ef4346578335a9a72aeaee59ff6cb3582
 GET_THRESHOLD_SELECTOR = "0xe75235b8"
 SLOT0_SELECTOR = "0x3850c7bd"
 OWNER_SELECTOR = "0x8da5cb5b"
+START_TIMESTAMP_SELECTOR = "0xe6fd48bc"
+LAST_CLAIM_TIMESTAMP_SELECTOR = "0x607af397"
+INITIALIZED_SELECTOR = "0x158ef93e"
+IS_INITIALIZED_SELECTOR = "0x392e53cd"
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -74,7 +78,7 @@ def rpc_request(payload: Any, args: argparse.Namespace) -> Any:
             data=data,
             headers={
                 "Content-Type": "application/json",
-                "User-Agent": "smart-contract-risk-triage-runtime-precheck/0.2",
+                "User-Agent": "smart-contract-risk-triage-runtime-precheck/0.3",
             },
         )
         try:
@@ -172,6 +176,10 @@ def collect_calls(addresses: list[str], args: argparse.Namespace, states: dict[s
         "safeThreshold": GET_THRESHOLD_SELECTOR,
         "slot0": SLOT0_SELECTOR,
         "owner": OWNER_SELECTOR,
+        "startTimestamp": START_TIMESTAMP_SELECTOR,
+        "lastClaimTimestamp": LAST_CLAIM_TIMESTAMP_SELECTOR,
+        "initialized": INITIALIZED_SELECTOR,
+        "isInitialized": IS_INITIALIZED_SELECTOR,
     }
     calls: list[tuple[str, list[Any], str]] = []
     for address in addresses:
@@ -205,6 +213,14 @@ def collect_calls(addresses: list[str], args: argparse.Namespace, states: dict[s
                 owner = word_to_address(value)
                 if owner:
                     states[address]["owner"] = owner
+            elif label in {"startTimestamp", "lastClaimTimestamp"}:
+                decoded = hex_to_int(value)
+                if decoded > 0:
+                    states[address][label] = decoded
+            elif label in {"initialized", "isInitialized"}:
+                decoded = hex_to_int(value)
+                if decoded in {0, 1}:
+                    states[address][label] = bool(decoded)
         if index % 50 == 0 or index == len(groups):
             print(f"Call precheck groups: {index}/{len(groups)}", flush=True)
 

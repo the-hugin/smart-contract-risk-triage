@@ -33,16 +33,49 @@
       "label": "Ethereum",
       "enabled": true,
       "chainId": "1",
-      "rpcs": ["https://rpc.mevblocker.io", "https://ethereum-rpc.publicnode.com"],
-      "nativeThresholdWei": "5000000000000000000",
+      "rpcs": [
+        "https://rpc.mevblocker.io",
+        "https://ethereum-rpc.publicnode.com"
+      ],
+      "nativeThresholdWei": "300000000000000000",
       "onBootSec": "10min",
       "tokens": [
-        {"address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", "symbol": "WETH", "decimals": 18, "threshold": 5},
-        {"address": "0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84", "symbol": "stETH", "decimals": 18, "threshold": 5},
-        {"address": "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599", "symbol": "WBTC", "decimals": 8, "threshold": 0.132},
-        {"address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", "symbol": "USDC", "decimals": 6, "threshold": 8250},
-        {"address": "0xdAC17F958D2ee523a2206206994597C13D831ec7", "symbol": "USDT", "decimals": 6, "threshold": 8250},
-        {"address": "0x6B175474E89094C44Da98b954EedeAC495271d0F", "symbol": "DAI", "decimals": 18, "threshold": 8250}
+        {
+          "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+          "symbol": "WETH",
+          "decimals": 18,
+          "threshold": 0.3
+        },
+        {
+          "address": "0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84",
+          "symbol": "stETH",
+          "decimals": 18,
+          "threshold": 0.3
+        },
+        {
+          "address": "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599",
+          "symbol": "WBTC",
+          "decimals": 8,
+          "threshold": 0.008
+        },
+        {
+          "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+          "symbol": "USDC",
+          "decimals": 6,
+          "threshold": 500
+        },
+        {
+          "address": "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+          "symbol": "USDT",
+          "decimals": 6,
+          "threshold": 500
+        },
+        {
+          "address": "0x6B175474E89094C44Da98b954EedeAC495271d0F",
+          "symbol": "DAI",
+          "decimals": 18,
+          "threshold": 500
+        }
       ]
     },
     {
@@ -50,14 +83,37 @@
       "label": "Base",
       "enabled": true,
       "chainId": "8453",
-      "rpcs": ["https://base-rpc.publicnode.com", "https://mainnet.base.org"],
-      "nativeThresholdWei": "5000000000000000000",
+      "rpcs": [
+        "https://base-rpc.publicnode.com",
+        "https://mainnet.base.org"
+      ],
+      "nativeThresholdWei": "300000000000000000",
       "onBootSec": "12min",
       "tokens": [
-        {"address": "0x4200000000000000000000000000000000000006", "symbol": "WETH", "decimals": 18, "threshold": 5},
-        {"address": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", "symbol": "USDC", "decimals": 6, "threshold": 8250},
-        {"address": "0xd9aaEC86B65D86f6A7B5B1b0c42FFA531710b6CA", "symbol": "USDbC", "decimals": 6, "threshold": 8250},
-        {"address": "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf", "symbol": "cbBTC", "decimals": 8, "threshold": 0.132}
+        {
+          "address": "0x4200000000000000000000000000000000000006",
+          "symbol": "WETH",
+          "decimals": 18,
+          "threshold": 0.3
+        },
+        {
+          "address": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+          "symbol": "USDC",
+          "decimals": 6,
+          "threshold": 500
+        },
+        {
+          "address": "0xd9aaEC86B65D86f6A7B5B1b0c42FFA531710b6CA",
+          "symbol": "USDbC",
+          "decimals": 6,
+          "threshold": 500
+        },
+        {
+          "address": "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf",
+          "symbol": "cbBTC",
+          "decimals": 8,
+          "threshold": 0.008
+        }
       ]
     },
     {
@@ -65,16 +121,49 @@
       "label": "Arbitrum One",
       "enabled": true,
       "chainId": "42161",
-      "rpcs": ["https://arbitrum-one-rpc.publicnode.com", "https://arb1.arbitrum.io/rpc"],
-      "nativeThresholdWei": "5000000000000000000",
+      "rpcs": [
+        "https://arbitrum-one-rpc.publicnode.com",
+        "https://arb1.arbitrum.io/rpc"
+      ],
+      "nativeThresholdWei": "300000000000000000",
       "onBootSec": "14min",
       "tokens": [
-        {"address": "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1", "symbol": "WETH", "decimals": 18, "threshold": 5},
-        {"address": "0xaf88d065e77c8cC2239327C5EDb3A432268e5831", "symbol": "USDC", "decimals": 6, "threshold": 8250},
-        {"address": "0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8", "symbol": "USDCe", "decimals": 6, "threshold": 8250},
-        {"address": "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9", "symbol": "USDT", "decimals": 6, "threshold": 8250},
-        {"address": "0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1", "symbol": "DAI", "decimals": 18, "threshold": 8250},
-        {"address": "0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f", "symbol": "WBTC", "decimals": 8, "threshold": 0.132}
+        {
+          "address": "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
+          "symbol": "WETH",
+          "decimals": 18,
+          "threshold": 0.3
+        },
+        {
+          "address": "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+          "symbol": "USDC",
+          "decimals": 6,
+          "threshold": 500
+        },
+        {
+          "address": "0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8",
+          "symbol": "USDCe",
+          "decimals": 6,
+          "threshold": 500
+        },
+        {
+          "address": "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9",
+          "symbol": "USDT",
+          "decimals": 6,
+          "threshold": 500
+        },
+        {
+          "address": "0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1",
+          "symbol": "DAI",
+          "decimals": 18,
+          "threshold": 500
+        },
+        {
+          "address": "0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f",
+          "symbol": "WBTC",
+          "decimals": 8,
+          "threshold": 0.008
+        }
       ]
     },
     {
@@ -82,16 +171,49 @@
       "label": "Optimism",
       "enabled": true,
       "chainId": "10",
-      "rpcs": ["https://optimism-rpc.publicnode.com", "https://mainnet.optimism.io"],
-      "nativeThresholdWei": "5000000000000000000",
+      "rpcs": [
+        "https://optimism-rpc.publicnode.com",
+        "https://mainnet.optimism.io"
+      ],
+      "nativeThresholdWei": "300000000000000000",
       "onBootSec": "16min",
       "tokens": [
-        {"address": "0x4200000000000000000000000000000000000006", "symbol": "WETH", "decimals": 18, "threshold": 5},
-        {"address": "0x0b2C639c533813f4Aa9D7837CAF62653d097Ff85", "symbol": "USDC", "decimals": 6, "threshold": 8250},
-        {"address": "0x7F5c764cBc14f9669B88837ca1490cCa17c31607", "symbol": "USDCe", "decimals": 6, "threshold": 8250},
-        {"address": "0x94b008aA00579c1307B0EF2c499aD98a8ce58e58", "symbol": "USDT", "decimals": 6, "threshold": 8250},
-        {"address": "0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1", "symbol": "DAI", "decimals": 18, "threshold": 8250},
-        {"address": "0x68f180fcCe6836688e9084f035309E29Bf0A2095", "symbol": "WBTC", "decimals": 8, "threshold": 0.132}
+        {
+          "address": "0x4200000000000000000000000000000000000006",
+          "symbol": "WETH",
+          "decimals": 18,
+          "threshold": 0.3
+        },
+        {
+          "address": "0x0b2C639c533813f4Aa9D7837CAF62653d097Ff85",
+          "symbol": "USDC",
+          "decimals": 6,
+          "threshold": 500
+        },
+        {
+          "address": "0x7F5c764cBc14f9669B88837ca1490cCa17c31607",
+          "symbol": "USDCe",
+          "decimals": 6,
+          "threshold": 500
+        },
+        {
+          "address": "0x94b008aA00579c1307B0EF2c499aD98a8ce58e58",
+          "symbol": "USDT",
+          "decimals": 6,
+          "threshold": 500
+        },
+        {
+          "address": "0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1",
+          "symbol": "DAI",
+          "decimals": 18,
+          "threshold": 500
+        },
+        {
+          "address": "0x68f180fcCe6836688e9084f035309E29Bf0A2095",
+          "symbol": "WBTC",
+          "decimals": 8,
+          "threshold": 0.008
+        }
       ]
     },
     {
@@ -99,17 +221,55 @@
       "label": "Polygon PoS",
       "enabled": true,
       "chainId": "137",
-      "rpcs": ["https://polygon-bor-rpc.publicnode.com", "https://polygon-rpc.com"],
-      "nativeThresholdWei": "112000000000000000000000",
+      "rpcs": [
+        "https://polygon-bor-rpc.publicnode.com",
+        "https://polygon-rpc.com"
+      ],
+      "nativeThresholdWei": "6783000000000000000000",
       "onBootSec": "18min",
       "tokens": [
-        {"address": "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270", "symbol": "WPOL", "decimals": 18, "threshold": 112000},
-        {"address": "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619", "symbol": "WETH", "decimals": 18, "threshold": 5},
-        {"address": "0x3c499c542cef5e3811e1192ce70d8cc03d5c3359", "symbol": "USDC", "decimals": 6, "threshold": 8250},
-        {"address": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174", "symbol": "USDCe", "decimals": 6, "threshold": 8250},
-        {"address": "0xc2132D05D31c914a87C6611C10748AEb04B58e8F", "symbol": "USDT", "decimals": 6, "threshold": 8250},
-        {"address": "0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063", "symbol": "DAI", "decimals": 18, "threshold": 8250},
-        {"address": "0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6", "symbol": "WBTC", "decimals": 8, "threshold": 0.132}
+        {
+          "address": "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270",
+          "symbol": "WPOL",
+          "decimals": 18,
+          "threshold": 6783
+        },
+        {
+          "address": "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619",
+          "symbol": "WETH",
+          "decimals": 18,
+          "threshold": 0.3
+        },
+        {
+          "address": "0x3c499c542cef5e3811e1192ce70d8cc03d5c3359",
+          "symbol": "USDC",
+          "decimals": 6,
+          "threshold": 500
+        },
+        {
+          "address": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174",
+          "symbol": "USDCe",
+          "decimals": 6,
+          "threshold": 500
+        },
+        {
+          "address": "0xc2132D05D31c914a87C6611C10748AEb04B58e8F",
+          "symbol": "USDT",
+          "decimals": 6,
+          "threshold": 500
+        },
+        {
+          "address": "0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063",
+          "symbol": "DAI",
+          "decimals": 18,
+          "threshold": 500
+        },
+        {
+          "address": "0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6",
+          "symbol": "WBTC",
+          "decimals": 8,
+          "threshold": 0.008
+        }
       ]
     },
     {
@@ -117,16 +277,49 @@
       "label": "BNB Smart Chain",
       "enabled": true,
       "chainId": "56",
-      "rpcs": ["https://bsc-rpc.publicnode.com", "https://bsc-dataseed.binance.org"],
-      "nativeThresholdWei": "13800000000000000000",
+      "rpcs": [
+        "https://bsc-rpc.publicnode.com",
+        "https://bsc-dataseed.binance.org"
+      ],
+      "nativeThresholdWei": "830000000000000000",
       "onBootSec": "20min",
       "tokens": [
-        {"address": "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c", "symbol": "WBNB", "decimals": 18, "threshold": 13.8},
-        {"address": "0x55d398326f99059fF775485246999027B3197955", "symbol": "USDT", "decimals": 18, "threshold": 8250},
-        {"address": "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d", "symbol": "USDC", "decimals": 18, "threshold": 8250},
-        {"address": "0x1AF3F329e8BE154074D8769D1FFa4eE058B1DBc3", "symbol": "DAI", "decimals": 18, "threshold": 8250},
-        {"address": "0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c", "symbol": "BTCB", "decimals": 18, "threshold": 0.132},
-        {"address": "0x2170Ed0880ac9A755fd29B2688956BD959F933F8", "symbol": "ETHB", "decimals": 18, "threshold": 5}
+        {
+          "address": "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c",
+          "symbol": "WBNB",
+          "decimals": 18,
+          "threshold": 0.83
+        },
+        {
+          "address": "0x55d398326f99059fF775485246999027B3197955",
+          "symbol": "USDT",
+          "decimals": 18,
+          "threshold": 500
+        },
+        {
+          "address": "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d",
+          "symbol": "USDC",
+          "decimals": 18,
+          "threshold": 500
+        },
+        {
+          "address": "0x1AF3F329e8BE154074D8769D1FFa4eE058B1DBc3",
+          "symbol": "DAI",
+          "decimals": 18,
+          "threshold": 500
+        },
+        {
+          "address": "0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c",
+          "symbol": "BTCB",
+          "decimals": 18,
+          "threshold": 0.008
+        },
+        {
+          "address": "0x2170Ed0880ac9A755fd29B2688956BD959F933F8",
+          "symbol": "ETHB",
+          "decimals": 18,
+          "threshold": 0.3
+        }
       ]
     },
     {
@@ -134,16 +327,49 @@
       "label": "Avalanche C-Chain",
       "enabled": true,
       "chainId": "43114",
-      "rpcs": ["https://avalanche-c-chain-rpc.publicnode.com", "https://api.avax.network/ext/bc/C/rpc"],
-      "nativeThresholdWei": "1255000000000000000000",
+      "rpcs": [
+        "https://avalanche-c-chain-rpc.publicnode.com",
+        "https://api.avax.network/ext/bc/C/rpc"
+      ],
+      "nativeThresholdWei": "76000000000000000000",
       "onBootSec": "22min",
       "tokens": [
-        {"address": "0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7", "symbol": "WAVAX", "decimals": 18, "threshold": 1255},
-        {"address": "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E", "symbol": "USDC", "decimals": 6, "threshold": 8250},
-        {"address": "0xA7D7079b0FEaD91F3e65f86E8915Cb59c1a4C664", "symbol": "USDCe", "decimals": 6, "threshold": 8250},
-        {"address": "0xc7198437980c041c805A1EDcbA50c1Ce5db95118", "symbol": "USDTe", "decimals": 6, "threshold": 8250},
-        {"address": "0x49D5c2BdFfac6CE2BFdB6640F4F80f226bc10bAB", "symbol": "WETHe", "decimals": 18, "threshold": 5},
-        {"address": "0x152b9d0fdc40c096757f570a51e494bd4b943e50", "symbol": "BTCb", "decimals": 8, "threshold": 0.132}
+        {
+          "address": "0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7",
+          "symbol": "WAVAX",
+          "decimals": 18,
+          "threshold": 76
+        },
+        {
+          "address": "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E",
+          "symbol": "USDC",
+          "decimals": 6,
+          "threshold": 500
+        },
+        {
+          "address": "0xA7D7079b0FEaD91F3e65f86E8915Cb59c1a4C664",
+          "symbol": "USDCe",
+          "decimals": 6,
+          "threshold": 500
+        },
+        {
+          "address": "0xc7198437980c041c805A1EDcbA50c1Ce5db95118",
+          "symbol": "USDTe",
+          "decimals": 6,
+          "threshold": 500
+        },
+        {
+          "address": "0x49D5c2BdFfac6CE2BFdB6640F4F80f226bc10bAB",
+          "symbol": "WETHe",
+          "decimals": 18,
+          "threshold": 0.3
+        },
+        {
+          "address": "0x152b9d0fdc40c096757f570a51e494bd4b943e50",
+          "symbol": "BTCb",
+          "decimals": 8,
+          "threshold": 0.008
+        }
       ]
     },
     {
@@ -151,14 +377,32 @@
       "label": "Linea",
       "enabled": true,
       "chainId": "59144",
-      "rpcs": ["https://linea-rpc.publicnode.com", "https://rpc.linea.build"],
-      "nativeThresholdWei": "5000000000000000000",
+      "rpcs": [
+        "https://linea-rpc.publicnode.com",
+        "https://rpc.linea.build"
+      ],
+      "nativeThresholdWei": "300000000000000000",
       "onBootSec": "24min",
       "notes": "Token metadata should be rechecked before production use.",
       "tokens": [
-        {"address": "0xe5D7C2a44FfDdF6b295A15c148167daaAf5CF34f", "symbol": "WETH", "decimals": 18, "threshold": 5},
-        {"address": "0x176211869cA2b568f2A7D4EE941E073a821EE1ff", "symbol": "USDC", "decimals": 6, "threshold": 8250},
-        {"address": "0xA219439258ca9da29E9Cc4cE5596924745e12B93", "symbol": "USDT", "decimals": 6, "threshold": 8250}
+        {
+          "address": "0xe5D7C2a44FfDdF6b295A15c148167daaAf5CF34f",
+          "symbol": "WETH",
+          "decimals": 18,
+          "threshold": 0.3
+        },
+        {
+          "address": "0x176211869cA2b568f2A7D4EE941E073a821EE1ff",
+          "symbol": "USDC",
+          "decimals": 6,
+          "threshold": 500
+        },
+        {
+          "address": "0xA219439258ca9da29E9Cc4cE5596924745e12B93",
+          "symbol": "USDT",
+          "decimals": 6,
+          "threshold": 500
+        }
       ]
     },
     {
@@ -166,12 +410,20 @@
       "label": "Scroll",
       "enabled": true,
       "chainId": "534352",
-      "rpcs": ["https://scroll-rpc.publicnode.com", "https://rpc.scroll.io"],
-      "nativeThresholdWei": "5000000000000000000",
+      "rpcs": [
+        "https://scroll-rpc.publicnode.com",
+        "https://rpc.scroll.io"
+      ],
+      "nativeThresholdWei": "300000000000000000",
       "onBootSec": "26min",
       "notes": "Token metadata should be rechecked before production use.",
       "tokens": [
-        {"address": "0x5300000000000000000000000000000000000004", "symbol": "WETH", "decimals": 18, "threshold": 5}
+        {
+          "address": "0x5300000000000000000000000000000000000004",
+          "symbol": "WETH",
+          "decimals": 18,
+          "threshold": 0.3
+        }
       ]
     },
     {
@@ -179,12 +431,20 @@
       "label": "zkSync Era",
       "enabled": true,
       "chainId": "324",
-      "rpcs": ["https://mainnet.era.zksync.io", "https://zksync-era-rpc.publicnode.com"],
-      "nativeThresholdWei": "5000000000000000000",
+      "rpcs": [
+        "https://mainnet.era.zksync.io",
+        "https://zksync-era-rpc.publicnode.com"
+      ],
+      "nativeThresholdWei": "300000000000000000",
       "onBootSec": "28min",
       "notes": "Uses mainnet.era.zksync.io as primary RPC; verify RPC readiness before production use.",
       "tokens": [
-        {"address": "0x5aea5775959fbc2557cc8789bc1bf90a239d9a91", "symbol": "WETH", "decimals": 18, "threshold": 5}
+        {
+          "address": "0x5aea5775959fbc2557cc8789bc1bf90a239d9a91",
+          "symbol": "WETH",
+          "decimals": 18,
+          "threshold": 0.3
+        }
       ]
     },
     {
@@ -192,16 +452,44 @@
       "label": "Gnosis Chain",
       "enabled": true,
       "chainId": "100",
-      "rpcs": ["https://gnosis-rpc.publicnode.com", "https://rpc.gnosischain.com"],
-      "nativeThresholdWei": "8250000000000000000000",
+      "rpcs": [
+        "https://gnosis-rpc.publicnode.com",
+        "https://rpc.gnosischain.com"
+      ],
+      "nativeThresholdWei": "500000000000000000000",
       "onBootSec": "30min",
-      "notes": "Native xDAI threshold approximates stablecoin value.",
+      "notes": "Native xDAI threshold approximates a 500 USD stablecoin value filter.",
       "tokens": [
-        {"address": "0xe91D153E0b41518A2Ce8Dd3D7944Fa863463a97d", "symbol": "WXDAI", "decimals": 18, "threshold": 8250},
-        {"address": "0x6A023CCd1ff6F2045C3309768eAd9E68F978f6e1", "symbol": "WETH", "decimals": 18, "threshold": 5},
-        {"address": "0xddafbb505ad214d7b80b1f830fccc89b60fb7a83", "symbol": "USDC", "decimals": 6, "threshold": 8250},
-        {"address": "0x4ECaBa5870353805a9F068101A40E0f32ed605C6", "symbol": "USDT", "decimals": 6, "threshold": 8250},
-        {"address": "0x8e5bBbb09Ed1ebdE8674Cda39A0c169401db4252", "symbol": "WBTC", "decimals": 8, "threshold": 0.132}
+        {
+          "address": "0xe91D153E0b41518A2Ce8Dd3D7944Fa863463a97d",
+          "symbol": "WXDAI",
+          "decimals": 18,
+          "threshold": 500
+        },
+        {
+          "address": "0x6A023CCd1ff6F2045C3309768eAd9E68F978f6e1",
+          "symbol": "WETH",
+          "decimals": 18,
+          "threshold": 0.3
+        },
+        {
+          "address": "0xddafbb505ad214d7b80b1f830fccc89b60fb7a83",
+          "symbol": "USDC",
+          "decimals": 6,
+          "threshold": 500
+        },
+        {
+          "address": "0x4ECaBa5870353805a9F068101A40E0f32ed605C6",
+          "symbol": "USDT",
+          "decimals": 6,
+          "threshold": 500
+        },
+        {
+          "address": "0x8e5bBbb09Ed1ebdE8674Cda39A0c169401db4252",
+          "symbol": "WBTC",
+          "decimals": 8,
+          "threshold": 0.008
+        }
       ]
     },
     {
@@ -209,13 +497,26 @@
       "label": "Blast",
       "enabled": true,
       "chainId": "81457",
-      "rpcs": ["https://blast-rpc.publicnode.com", "https://rpc.blast.io"],
-      "nativeThresholdWei": "5000000000000000000",
+      "rpcs": [
+        "https://blast-rpc.publicnode.com",
+        "https://rpc.blast.io"
+      ],
+      "nativeThresholdWei": "300000000000000000",
       "onBootSec": "32min",
       "notes": "Token metadata should be rechecked before production use.",
       "tokens": [
-        {"address": "0x4300000000000000000000000000000000000004", "symbol": "WETH", "decimals": 18, "threshold": 5},
-        {"address": "0x4300000000000000000000000000000000000003", "symbol": "USDB", "decimals": 18, "threshold": 8250}
+        {
+          "address": "0x4300000000000000000000000000000000000004",
+          "symbol": "WETH",
+          "decimals": 18,
+          "threshold": 0.3
+        },
+        {
+          "address": "0x4300000000000000000000000000000000000003",
+          "symbol": "USDB",
+          "decimals": 18,
+          "threshold": 500
+        }
       ]
     },
     {
@@ -223,15 +524,38 @@
       "label": "Mantle",
       "enabled": true,
       "chainId": "5000",
-      "rpcs": ["https://mantle-rpc.publicnode.com", "https://rpc.mantle.xyz"],
-      "nativeThresholdWei": "15500000000000000000000",
+      "rpcs": [
+        "https://mantle-rpc.publicnode.com",
+        "https://rpc.mantle.xyz"
+      ],
+      "nativeThresholdWei": "928000000000000000000",
       "onBootSec": "34min",
-      "notes": "Native MNT threshold approximates 5 ETH-equivalent value; reprice before production use.",
+      "notes": "Native MNT threshold approximates a 500 USD value filter; reprice before production use.",
       "tokens": [
-        {"address": "0xdEAddEaDdeadDEadDEADDEAddEADDEAddead1111", "symbol": "WETH", "decimals": 18, "threshold": 5},
-        {"address": "0xcDA86A272531e8640cD7F1a92c01839911B90bb0", "symbol": "mETH", "decimals": 18, "threshold": 5},
-        {"address": "0x09Bc4E0D864854c6aFB6eB9A9cdF58aC190D0dF9", "symbol": "USDC", "decimals": 6, "threshold": 8250},
-        {"address": "0xCAbAE6f6Ea1ecaB08Ad02fE02ce9A44F09aebfA2", "symbol": "WBTC", "decimals": 8, "threshold": 0.132}
+        {
+          "address": "0xdEAddEaDdeadDEadDEADDEAddEADDEAddead1111",
+          "symbol": "WETH",
+          "decimals": 18,
+          "threshold": 0.3
+        },
+        {
+          "address": "0xcDA86A272531e8640cD7F1a92c01839911B90bb0",
+          "symbol": "mETH",
+          "decimals": 18,
+          "threshold": 0.3
+        },
+        {
+          "address": "0x09Bc4E0D864854c6aFB6eB9A9cdF58aC190D0dF9",
+          "symbol": "USDC",
+          "decimals": 6,
+          "threshold": 500
+        },
+        {
+          "address": "0xCAbAE6f6Ea1ecaB08Ad02fE02ce9A44F09aebfA2",
+          "symbol": "WBTC",
+          "decimals": 8,
+          "threshold": 0.008
+        }
       ]
     },
     {
@@ -239,17 +563,50 @@
       "label": "Celo",
       "enabled": true,
       "chainId": "42220",
-      "rpcs": ["https://celo-rpc.publicnode.com", "https://forno.celo.org"],
-      "nativeThresholdWei": "136600000000000000000000",
+      "rpcs": [
+        "https://celo-rpc.publicnode.com",
+        "https://forno.celo.org"
+      ],
+      "nativeThresholdWei": "8214000000000000000000",
       "onBootSec": "36min",
-      "notes": "Native CELO threshold approximates 5 ETH-equivalent value; reprice before production use. USDT is an ASCII label for on-chain symbol USD\u20ae.",
+      "notes": "Native CELO threshold approximates a 500 USD value filter; reprice before production use. USDT is an ASCII label for on-chain symbol USD\\u20ae.",
       "tokens": [
-        {"address": "0x471EcE3750Da237f93B8E339c536989b8978a438", "symbol": "CELO", "decimals": 18, "threshold": 136600},
-        {"address": "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", "symbol": "USDC", "decimals": 6, "threshold": 8250},
-        {"address": "0x765DE816845861e75A25fCA122bb6898B8B1282a", "symbol": "USDm", "decimals": 18, "threshold": 8250},
-        {"address": "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e", "symbol": "USDT", "decimals": 6, "threshold": 8250},
-        {"address": "0xD221812de1BD094f35587EE8E174B07B6167D9Af", "symbol": "WETH", "decimals": 18, "threshold": 5},
-        {"address": "0x8aC2901Dd8A1F17a1A4768A6bA4C3751e3995B2D", "symbol": "WBTC", "decimals": 8, "threshold": 0.132}
+        {
+          "address": "0x471EcE3750Da237f93B8E339c536989b8978a438",
+          "symbol": "CELO",
+          "decimals": 18,
+          "threshold": 8214
+        },
+        {
+          "address": "0xcebA9300f2b948710d2653dD7B07f33A8B32118C",
+          "symbol": "USDC",
+          "decimals": 6,
+          "threshold": 500
+        },
+        {
+          "address": "0x765DE816845861e75A25fCA122bb6898B8B1282a",
+          "symbol": "USDm",
+          "decimals": 18,
+          "threshold": 500
+        },
+        {
+          "address": "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e",
+          "symbol": "USDT",
+          "decimals": 6,
+          "threshold": 500
+        },
+        {
+          "address": "0xD221812de1BD094f35587EE8E174B07B6167D9Af",
+          "symbol": "WETH",
+          "decimals": 18,
+          "threshold": 0.3
+        },
+        {
+          "address": "0x8aC2901Dd8A1F17a1A4768A6bA4C3751e3995B2D",
+          "symbol": "WBTC",
+          "decimals": 8,
+          "threshold": 0.008
+        }
       ]
     }
   ]

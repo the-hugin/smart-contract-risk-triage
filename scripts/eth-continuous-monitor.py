@@ -68,7 +68,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--rpc-url", default="https://rpc.mevblocker.io")
     parser.add_argument("--recent-blocks", type=int, default=2000)
     parser.add_argument("--keep-limit", type=int, default=500)
-    parser.add_argument("--eth-min-wei", type=int, default=10**19)
+    parser.add_argument("--eth-min-wei", type=int, default=300000000000000000)
     parser.add_argument("--token-threshold", action="append", default=[])
     parser.add_argument(
         "--token",
@@ -604,12 +604,12 @@ def main(argv: list[str]) -> int:
     args = parse_args(argv)
     if not args.token and not args.token_threshold:
         args.token_threshold = [
-            "WETH=10",
-            "stETH=10",
-            "WBTC=0.264",
-            "USDC=16500",
-            "USDT=16500",
-            "DAI=16500",
+            "WETH=0.3",
+            "stETH=0.3",
+            "WBTC=0.008",
+            "USDC=500",
+            "USDT=500",
+            "DAI=500",
         ]
     workspace = Path(args.workspace).resolve()
     runs_root = workspace / "runs"

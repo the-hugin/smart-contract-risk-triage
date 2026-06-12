@@ -29,14 +29,25 @@ ALERT_TRIAGE_CLASSES = {"review", "triage-now"}
 ALERT_EVENT_TYPES = {"setAuthority", "setAuthorityChecked"}
 MONITORED_EVENT_TYPES = {"deployWithMaxDataLen", "upgrade", "setAuthority", "setAuthorityChecked", "close"}
 LAMPORTS_PER_SOL = 1_000_000_000
+NATIVE_SOL_VALUE_THRESHOLD = 7.4
+STABLE_VALUE_THRESHOLD = 500.0
 BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
 BASE58_INDEX = {char: index for index, char in enumerate(BASE58_ALPHABET)}
 ED25519_P = 2**255 - 19
 ED25519_D = (-121665 * pow(121666, -1, ED25519_P)) % ED25519_P
 KNOWN_VALUE_MINTS = {
-    "So11111111111111111111111111111111111111112": {"symbol": "WSOL", "threshold": 5.0},
-    "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v": {"symbol": "USDC", "threshold": 8250.0},
-    "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY7j2X5X3Z8f9jJ": {"symbol": "USDT", "threshold": 8250.0},
+    "So11111111111111111111111111111111111111112": {
+        "symbol": "WSOL",
+        "threshold": NATIVE_SOL_VALUE_THRESHOLD,
+    },
+    "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v": {
+        "symbol": "USDC",
+        "threshold": STABLE_VALUE_THRESHOLD,
+    },
+    "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY7j2X5X3Z8f9jJ": {
+        "symbol": "USDT",
+        "threshold": STABLE_VALUE_THRESHOLD,
+    },
 }
 
 
@@ -543,13 +554,13 @@ def classified_value_signals(summary: dict[str, Any]) -> tuple[list[dict[str, An
         ("maxWritableNonSignerDeltaSol", "maxWritableNonSignerDeltaSolAccount", "writable_non_signer_delta"),
     ]:
         amount = float(summary.get(amount_key) or 0.0)
-        if amount < 5.0:
+        if amount < NATIVE_SOL_VALUE_THRESHOLD:
             continue
         signal = {
             "asset": "SOL",
             "reason": reason,
             "amount": summary[amount_key],
-            "threshold": 5.0,
+            "threshold": NATIVE_SOL_VALUE_THRESHOLD,
             "account": summary.get(account_key),
             "accountIsOnCurve": is_solana_on_curve(str(summary.get(account_key) or "")),
         }

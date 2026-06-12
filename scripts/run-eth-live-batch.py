@@ -24,7 +24,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--request-delay", type=float, default=0.05)
     parser.add_argument("--filter-timeout-seconds", type=float, default=30.0)
     parser.add_argument("--min-score", type=int, default=1)
-    parser.add_argument("--eth-min-wei", type=int, default=10**15)
+    parser.add_argument("--eth-min-wei", type=int, default=300000000000000000)
     parser.add_argument("--balance-score-weight", action="store_true")
     parser.add_argument("--require-threshold-balance", action="store_true")
     parser.add_argument("--require-activity", action="store_true")

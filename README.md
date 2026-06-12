@@ -181,12 +181,13 @@ python scripts/run-eth-live-batch.py \
   --candidate-limit 10000 \
   --keep-limit 200 \
   --run-dir ./runs/base-live \
-  --token 0x4200000000000000000000000000000000000006=WETH:18:5 \
-  --token 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913=USDC:6:8250
+  --eth-min-wei 300000000000000000 \
+  --token 0x4200000000000000000000000000000000000006=WETH:18:0.3 \
+  --token 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913=USDC:6:500
 ```
 
 Check token addresses, decimals, and thresholds before relying on a non-mainnet
-run. The defaults are working examples, not a price oracle.
+run. The defaults are a 500 USD-style value filter, not a price oracle.
 
 ## Continuous EVM Monitor
 

@@ -30,12 +30,12 @@ BALANCE_OF_SELECTOR = "70a08231"
 DEFAULT_RPC = "https://ethereum-rpc.publicnode.com"
 MAJOR_TOKENS = {
     # address: (symbol, decimals, threshold_units)
-    "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2": ("WETH", 18, 0.01),
-    "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48": ("USDC", 6, 10.0),
-    "0xdAC17F958D2ee523a2206206994597C13D831ec7": ("USDT", 6, 10.0),
-    "0x6B175474E89094C44Da98b954EedeAC495271d0F": ("DAI", 18, 10.0),
-    "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599": ("WBTC", 8, 0.001),
-    "0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84": ("stETH", 18, 0.01),
+    "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2": ("WETH", 18, 0.3),
+    "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48": ("USDC", 6, 500.0),
+    "0xdAC17F958D2ee523a2206206994597C13D831ec7": ("USDT", 6, 500.0),
+    "0x6B175474E89094C44Da98b954EedeAC495271d0F": ("DAI", 18, 500.0),
+    "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599": ("WBTC", 8, 0.008),
+    "0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84": ("stETH", 18, 0.3),
 }
 
 
@@ -56,7 +56,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--out-dir", required=True)
     parser.add_argument("--rpc-url", default=DEFAULT_RPC)
     parser.add_argument("--recent-blocks", type=int, default=10000)
-    parser.add_argument("--eth-min-wei", type=int, default=10**15, help="Default: 0.001 ETH")
+    parser.add_argument("--eth-min-wei", type=int, default=300000000000000000, help="Default: 0.3 ETH")
     parser.add_argument("--keep-limit", type=int, default=5000)
     parser.add_argument("--min-score", type=int, default=1)
     parser.add_argument("--require-threshold-balance", action="store_true")
@@ -79,7 +79,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         action="append",
         default=[],
         metavar="SYMBOL=AMOUNT",
-        help="Override major-token keep threshold, e.g. WETH=10 or USDC=16600.",
+        help="Override major-token keep threshold, e.g. WETH=0.3 or USDC=500.",
     )
     parser.add_argument(
         "--token",
