@@ -26,7 +26,6 @@ BPF_UPGRADEABLE_LOADER = "BPFLoaderUpgradeab1e11111111111111111111111"
 PRIVATE_TELEGRAM_CHAT_RE = re.compile(r"^[1-9][0-9]*$")
 PUBKEY_RE = re.compile(r"^[1-9A-HJ-NP-Za-km-z]{32,44}$")
 ALERT_TRIAGE_CLASSES = {"review", "triage-now"}
-ALERT_EVENT_TYPES = {"setAuthority", "setAuthorityChecked"}
 MONITORED_EVENT_TYPES = {"deployWithMaxDataLen", "upgrade", "setAuthority", "setAuthorityChecked", "close"}
 LAMPORTS_PER_SOL = 1_000_000_000
 NATIVE_SOL_VALUE_THRESHOLD = 7.4
@@ -794,7 +793,7 @@ def event_from_instruction(
         program_data = {}
     triage_class = "watch"
     severity = "low"
-    if event_type in {"setAuthority", "setAuthorityChecked"} and authority:
+    if event_type in {"setAuthority", "setAuthorityChecked"} and authority and program_id:
         triage_class = "review"
         severity = "medium"
     elif event_type == "deployWithMaxDataLen" and args.alert_deploys and authority:
@@ -905,12 +904,20 @@ def alert_key(row: dict[str, Any]) -> str:
     return "|".join(fields)
 
 
+def is_alertable_event(row: dict[str, Any]) -> bool:
+    if str(row.get("triageClass") or "") not in ALERT_TRIAGE_CLASSES:
+        return False
+    event_type = str(row.get("eventType") or "")
+    if event_type in {"setAuthority", "setAuthorityChecked"}:
+        return bool(row.get("programId") or row.get("programDataAccount"))
+    return True
+
+
 def alert_rows(events: list[dict[str, Any]], limit: int) -> list[dict[str, Any]]:
     rows = [
         row
         for row in events
-        if str(row.get("triageClass") or "") in ALERT_TRIAGE_CLASSES
-        or str(row.get("eventType") or "") in ALERT_EVENT_TYPES
+        if is_alertable_event(row)
     ]
     return rows[: max(1, limit)]
 

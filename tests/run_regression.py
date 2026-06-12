@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import importlib.util
 import shutil
 import subprocess
 import sys
@@ -14,6 +15,7 @@ OUT_DIR = ROOT / "tmp" / "regression-out"
 PRECHECK_DIR = ROOT / "tmp" / "regression-precheck"
 PRECHECK_OUT_DIR = ROOT / "tmp" / "regression-precheck-out"
 SCANNER = ROOT / "scripts" / "smart-contract-batch-scan.py"
+SOLANA_MONITOR = ROOT / "scripts" / "solana-program-monitor.py"
 STREAM_PRECHECK_ADDRESS = "0x1111111111111111111111111111111111111111"
 
 EXPECTED_SEVERITY = {
@@ -51,6 +53,15 @@ def load_findings(path: Path) -> list[dict[str, object]]:
 
 def normalized_path(value: object) -> str:
     return str(value).replace("\\", "/")
+
+
+def load_module(path: Path, name: str):
+    spec = importlib.util.spec_from_file_location(name, path)
+    if spec is None or spec.loader is None:
+        raise AssertionError(f"failed to load module spec for {path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def main() -> int:
@@ -150,6 +161,26 @@ def main() -> int:
         raise AssertionError(f"precheck did not downgrade initialize: {consumed}")
     if "already consumed" not in str(consumed.get("signal") or ""):
         raise AssertionError(f"precheck signal missing consumed marker: {consumed}")
+
+    solana_monitor = load_module(SOLANA_MONITOR, "solana_program_monitor_regression")
+    weak_set_authority = {
+        "eventType": "setAuthority",
+        "authority": "7UZ4N8SzzqEKPQGLhJSUbhn78wD1J2TeadPcittuDfaZ",
+        "programId": "",
+        "programDataAccount": "",
+        "triageClass": "review",
+        "severity": "medium",
+    }
+    if solana_monitor.alert_rows([weak_set_authority], 5):
+        raise AssertionError("malformed setAuthority event should not be selected for Telegram")
+    strong_event = {
+        "eventType": "upgrade",
+        "programId": "HQZ8joMTEiHXFrcFRDC72LZSZuSmLaDNXJeZS2kNEzjD",
+        "triageClass": "triage-now",
+        "severity": "high",
+    }
+    if len(solana_monitor.alert_rows([strong_event], 5)) != 1:
+        raise AssertionError("triage-now Solana event should remain alertable")
 
     print("Regression OK")
     return 0
