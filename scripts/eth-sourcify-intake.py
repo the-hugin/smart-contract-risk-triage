@@ -103,7 +103,7 @@ def http_json(url: str, args: argparse.Namespace) -> Any:
             url,
             headers={
                 "Accept": "application/json",
-                "User-Agent": "evm-risk-triage-sourcify-intake/0.1",
+                "User-Agent": "smart-contract-risk-triage-sourcify-intake/0.2",
             },
         )
         try:

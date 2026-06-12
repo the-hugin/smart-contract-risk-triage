@@ -2,8 +2,8 @@ services:
   scanner:
     build:
       context: .
-      dockerfile: Dockerfile.smart-contract-scanner
-    image: evm-risk-triage:local
+      dockerfile: Dockerfile
+    image: smart-contract-risk-triage:local
     volumes:
       - ./runs:/runs
       - ./input:/input:ro

@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "defaults": {
+    "monitor": {
+      "candidateLimit": 25,
+      "requestDelay": 0.8,
+      "timeoutSeconds": 30,
+      "retries": 3,
+      "valueMapSignatureLimit": 6,
+      "valueMapMaxTransactions": 3,
+      "valueMapAccountSampleLimit": 20,
+      "cleanupStaleDays": 2,
+      "telegramAlerts": false,
+      "telegramAlertTop": 5,
+      "deleteUninteresting": true
+    },
+    "systemd": {
+      "environmentFile": "/etc/smart-contract-monitor/alerts.env",
+      "onUnitInactiveSec": "30min",
+      "randomizedDelaySec": 300,
+      "timeoutStartSec": 1800
+    }
+  },
+  "chains": [
+    {
+      "slug": "solana",
+      "label": "Solana",
+      "enabled": true,
+      "family": "solana",
+      "rpcs": ["https://api.mainnet-beta.solana.com"],
+      "onBootSec": "38min",
+      "monitor": {
+        "candidateLimit": 120,
+        "requestDelay": 0.1,
+        "transactionBatchSize": 1,
+        "maxErrorRate": 0.1,
+        "allowCursorSkip": true
+      },
+      "systemd": {
+        "onUnitInactiveSec": "3min",
+        "randomizedDelaySec": 30
+      },
+      "notes": "Passive BPF upgradeable loader monitor. Tracks deploy/upgrade/authority events; no source-level exploit detection yet."
+    }
+  ]
+}

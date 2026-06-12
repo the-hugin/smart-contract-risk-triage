@@ -1,65 +1,92 @@
-# evm-risk-triage
+# smart-contract-risk-triage
 
-Passive funds-at-risk triage for verified EVM contracts.
+Passive triage for smart-contract review queues.
 
-`evm-risk-triage` helps security researchers and auditors turn large sets of
-verified smart contracts into a smaller manual review queue. It combines
-Sourcify source intake, optional read-only liveness filtering, and static
-money-path heuristics.
+The repo has two parts:
 
-It is not an exploit framework and it is not a vulnerability oracle. A high
-score means "review this first", not "confirmed vulnerable".
+- EVM tooling: Sourcify intake, balance/activity filtering, static money-path
+  scan, runtime prechecks, and continuous monitors.
+- Solana tooling: BPF Upgradeable Loader monitoring with conservative
+  value-proximity checks.
 
-## Use Cases
+The output is a review queue. It is not a confirmed-vulnerability feed.
 
-- Prioritize verified contracts for manual audit.
-- Find live contracts with balances or recent activity before spending review
-  time on source code.
-- Build a repeatable first-pass queue for bug bounty or client-authorized
-  research.
-- Preserve full static-signal recall while keeping the analyst-facing queue
-  short.
-- Regression-test detector changes against known false-positive patterns.
+## Boundaries
 
-## Safety Boundary
+The tools do not send transactions, simulate exploits, brute force endpoints, or
+collect credentials. They use public source metadata and read-only RPC calls.
 
-The included tools are passive by design:
+Use them for your own contracts, authorized audits, in-scope bug bounty work, or
+passive public-source research. Treat every finding as a lead until a human
+checks scope, runtime state, exploitability, and program rules.
 
-- no transactions;
-- no fork exploit execution;
-- no active probing of target applications;
-- no credential handling;
-- no automatic vulnerability claims.
+## What It Covers
 
-Use it only for your own contracts, authorized audits, bug bounty work inside
-program scope, or passive public-source research.
+EVM:
 
-## Repository Layout
+- Sourcify verified-source listing and download.
+- Native and ERC20 balance filters.
+- Recent log activity filters.
+- Static source triage for withdraw, claim, redeem, sweep, rescue, payout,
+  reentrancy, init/upgrade, delegatecall, signature, oracle, and token-transfer
+  patterns.
+- Read-only prechecks for common false positives: EIP-1967 implementation or
+  beacon slots, Gnosis Safe threshold, AMM pool state, and owner calls.
+- Config-driven monitors for Ethereum, Base, Arbitrum, Optimism, Polygon, BNB
+  Smart Chain, Avalanche, Linea, Scroll, zkSync Era, Gnosis, Blast, Mantle, and
+  Celo.
+
+Solana:
+
+- BPF Upgradeable Loader signature polling.
+- Deploy, upgrade, close, and authority-change event extraction.
+- Program and program-data account metadata.
+- Recent-transaction value context for SOL, WSOL, USDC, and USDT.
+- Suppression for common noise: WSOL token-account lamports, on-curve wallets,
+  signed token owners, program/program-data rent, and known shared value
+  accounts.
+
+Solana value context is deliberately weak. A large token account seen near a
+program is not proof that the program controls the funds.
+
+## Layout
 
 ```text
+config/
+  smart-contract-evm-chains.json
+  smart-contract-non-evm-chains.json
+
 scripts/
-  smart-contract-batch-scan.py   Static source scanner.
-  eth-sourcify-list.py           List Sourcify verified targets.
-  eth-sourcify-intake.py         Download Sourcify source bundles.
-  eth-live-contract-filter.py    Read-only balance/activity filter.
-  run-eth-contract-batch.py      Sourcify intake + static scan.
-  run-eth-live-batch.py          List + live filter + intake + scan.
+  smart-contract-batch-scan.py
+  eth-sourcify-list.py
+  eth-sourcify-intake.py
+  eth-live-contract-filter.py
+  eth-runtime-precheck.py
+  eth-high-value-triage.py
+  eth-continuous-monitor.py
+  evm-monitor-config.py
+  solana-program-monitor.py
+  non-evm-monitor-config.py
+  run-eth-contract-batch.py
+  run-eth-live-batch.py
+
+docs/
+  smart-contract-chain-coverage.md
 
 tests/
-  fixtures/                      Synthetic regression contracts.
-  run_regression.py              Compile and detector regression check.
-
-Dockerfile
-docker-compose.yml
+  fixtures/
+  run_regression.py
 ```
 
 ## Requirements
 
-- Python 3.11 or newer.
-- No third-party Python packages are required.
-- Docker is optional.
-- Live filtering needs a JSON-RPC endpoint. The default is a public Ethereum
-  endpoint; for large batches, use your own rate-limited RPC provider.
+- Python 3.11+
+- No Python package dependencies
+- Optional Docker
+- JSON-RPC endpoints for live filters and monitors
+
+Public RPC endpoints work for small checks. For continuous monitoring or large
+batches, use an endpoint with known rate limits.
 
 ## Quick Start
 
@@ -75,31 +102,22 @@ Scan local source files:
 python scripts/smart-contract-batch-scan.py tests/fixtures --out-dir tmp/scan
 ```
 
-On Windows PowerShell, use `py -3` if `python` does not resolve:
+Windows:
 
 ```powershell
 py -3 .\tests\run_regression.py
 py -3 .\scripts\smart-contract-batch-scan.py .\tests\fixtures --out-dir .\tmp\scan
 ```
 
-## Typical Workflows
+## EVM Batch Workflows
 
-### 1. Scan A Local Source Tree
+Scan a local source tree:
 
 ```bash
 python scripts/smart-contract-batch-scan.py ./contracts --out-dir ./runs/local-scan
 ```
 
-Useful options:
-
-```bash
-python scripts/smart-contract-batch-scan.py ./contracts \
-  --out-dir ./runs/local-scan \
-  --critical-limit 300 \
-  --max-file-mb 4
-```
-
-### 2. Fetch Verified Sources From Sourcify And Scan
+Download verified sources from Sourcify and scan them:
 
 ```bash
 python scripts/run-eth-contract-batch.py \
@@ -109,7 +127,7 @@ python scripts/run-eth-contract-batch.py \
   --delay-seconds 0.35
 ```
 
-You can also scan a known address list:
+Scan an address list:
 
 ```bash
 python scripts/run-eth-contract-batch.py \
@@ -118,14 +136,10 @@ python scripts/run-eth-contract-batch.py \
   --run-dir ./runs/address-list
 ```
 
-`addresses.txt` accepts one address per line. Lines may also use
-`<chain_id>,<address>` for mixed-source files consumed by the lower-level intake
-script.
+`addresses.txt` accepts one address per line. The lower-level intake script also
+accepts `<chain_id>,<address>` lines.
 
-### 3. Build A Live-Filtered Batch
-
-This workflow lists recent Sourcify contracts, checks read-only liveness
-signals, keeps the highest-priority live targets, downloads source, and scans:
+Build a live-filtered queue:
 
 ```bash
 python scripts/run-eth-live-batch.py \
@@ -138,7 +152,7 @@ python scripts/run-eth-live-batch.py \
   --balance-score-weight
 ```
 
-For a stricter batch:
+Stricter run with runtime prechecks and a ranked triage report:
 
 ```bash
 python scripts/run-eth-live-batch.py \
@@ -151,107 +165,195 @@ python scripts/run-eth-live-batch.py \
   --min-recent-logs 1 \
   --recent-blocks 2000 \
   --balance-score-weight \
+  --runtime-precheck \
+  --high-value-triage \
   --request-delay 0.1
 ```
 
+For non-mainnet EVM chains, pass token filters explicitly:
+
+```bash
+python scripts/run-eth-live-batch.py \
+  --chain-id 8453 \
+  --rpc-url https://base-rpc.publicnode.com \
+  --candidate-limit 10000 \
+  --keep-limit 200 \
+  --run-dir ./runs/base-live \
+  --token 0x4200000000000000000000000000000000000006=WETH:18:5 \
+  --token 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913=USDC:6:8250
+```
+
+Check token addresses, decimals, and thresholds before relying on a non-mainnet
+run. The defaults are working examples, not a price oracle.
+
+## Continuous EVM Monitor
+
+List configured chains:
+
+```bash
+python scripts/evm-monitor-config.py list
+```
+
+Probe one chain:
+
+```bash
+python scripts/evm-monitor-config.py probe --only ethereum
+```
+
+Render systemd units:
+
+```bash
+python scripts/evm-monitor-config.py systemd \
+  --out-dir ./tmp/systemd-evm \
+  --only ethereum \
+  --remote-root /opt/smart-contract-risk-triage \
+  --python /usr/bin/python3 \
+  --no-telegram
+```
+
+Run one cycle directly:
+
+```bash
+python scripts/eth-continuous-monitor.py \
+  --chain-id 1 \
+  --chain-label Ethereum \
+  --workspace . \
+  --state-dir runs/monitor-state/ethereum \
+  --rpc-url https://ethereum-rpc.publicnode.com \
+  --seed-if-empty \
+  --delete-uninteresting
+```
+
+Telegram alerts are off by default in the public config. To enable them, set:
+
+- `SMART_CONTRACT_ALERT_BOT_TOKEN`
+- `SMART_CONTRACT_ALERT_CHAT_ID`
+
+The chat id must be a positive numeric private chat id. The monitor rejects
+channel and group-style ids before calling `sendMessage`.
+
+## Solana Monitor
+
+List non-EVM chains:
+
+```bash
+python scripts/non-evm-monitor-config.py list
+```
+
+Probe Solana RPC:
+
+```bash
+python scripts/non-evm-monitor-config.py probe --only solana
+```
+
+Run one loader-monitor cycle:
+
+```bash
+python scripts/solana-program-monitor.py \
+  --workspace . \
+  --state-dir runs/monitor-state/solana \
+  --rpc-url https://api.mainnet-beta.solana.com \
+  --candidate-limit 120 \
+  --transaction-batch-size 1 \
+  --allow-cursor-skip \
+  --seed-if-empty \
+  --delete-uninteresting
+```
+
+Public Solana RPC can rate-limit `getTransaction`. Keep the window small, use
+delays, and read `cursorSkipped=true` as "latest bounded window processed", not
+as historical completeness.
+
 ## Outputs
 
-The static scanner writes:
+Static scanner:
 
-- `contracts-manifest.jsonl` - files and source metadata seen by the scanner.
-- `all-signals.jsonl` - every detector signal, including low-priority signals.
-- `critical-review.md` - the analyst-facing prioritized queue.
+- `contracts-manifest.jsonl`
+- `all-signals.jsonl`
+- `critical-review.md`
 
-The live filter writes:
+Live filter:
 
-- `live-targets.txt` - kept targets for source intake.
-- `live-filter-results.jsonl` - all scored rows.
-- `live-filter-summary.json` - aggregate filter metadata.
+- `live-targets.txt`
+- `live-filter-results.jsonl`
+- `live-filter-summary.json`
 
-The Sourcify intake writes:
+Runtime and high-value EVM triage:
 
-- `sources/` - downloaded source bundles.
-- `sourcify-summary.json` - intake status and counts.
-- `failures.jsonl` - recoverable fetch failures, if any.
+- `runtime-precheck.json`
+- `triage/high-value-triage.md`
+- `triage/high-value-triage.jsonl`
 
-## How To Read Findings
+Sourcify intake:
 
-Each finding has:
+- `sources/`
+- `sourcify-summary.json`
+- `failures.jsonl`
 
-- `severity`: queue priority, not proof of exploitability.
-- `confidence`: detector confidence in the syntactic pattern.
-- `score`: sorting weight for manual review.
-- `category`: broad risk class such as `reentrancy`, `access-control`,
-  `upgradeability`, `signature-replay`, `oracle`, or `token-transfer`.
-- `funds_at_risk`: whether the pattern appears to touch value movement.
-- `manual_check`: what an analyst should verify next.
+Continuous monitors write compact status and event files under `runs/`. With
+`--delete-uninteresting`, they delete run directories that have no reviewable
+signals.
 
-Recommended review order:
+## Reading Findings
 
-1. Confirm the target is in scope.
-2. Confirm the flagged file is runtime-relevant, not only bundled source.
-3. Check current balance, token balances, and recent activity.
-4. Check state preconditions such as initialized proxy slots, Safe threshold,
-   AMM initialized state, owner/admin roles, nonce/domain guards, and claimed
-   bitmaps.
-5. Decide whether a minimal-impact proof is allowed by the relevant program or
-   engagement rules.
+For EVM findings:
 
-## Scoring Model
+- `severity` is queue priority.
+- `confidence` is detector confidence in the pattern.
+- `score` is sorting weight.
+- `category` is the risk class.
+- `funds_at_risk` means the pattern appears to touch value movement.
+- `manual_check` says what to verify next.
 
-The scanner prioritizes:
+Review order:
 
-- withdraw, claim, redeem, sweep, rescue, and payout paths;
-- call-before-accounting patterns;
-- unprotected initialization and upgrade paths;
-- delegatecall and low-level call surfaces;
-- signature, oracle, and token-transfer accounting issues;
-- runtime-relevant Sourcify metadata where available;
-- live balance and activity signals when the live filter is used.
+1. Confirm scope.
+2. Confirm the flagged file is runtime-relevant.
+3. Check current native and token balances.
+4. Check state preconditions: proxy slots, Safe threshold, AMM state,
+   owner/admin roles, nonce/domain guards, claimed bitmaps.
+5. Decide whether program rules allow any proof step.
 
-The scanner downgrades common false-positive classes when it sees patterns such
-as:
-
-- known admin or factory modifiers;
-- Gnosis Safe already-initialized setup paths;
-- nonzero EIP-1967 implementation slots from precheck data;
-- initialized AMM pool state;
-- standard helper libraries;
-- fixed-recipient maintenance flows;
-- user-owned claim accounting;
-- checked low-level calls;
-- Merkle/domain/nonce/deadline guards.
+For Solana, do not escalate on value alone. Check token owner, signers, PDA or
+source relation, upgrade authority, and project context.
 
 ## Runtime Precheck Data
 
-`smart-contract-batch-scan.py` accepts optional read-only precheck data:
+Generate precheck data from a target list:
+
+```bash
+python scripts/eth-runtime-precheck.py \
+  --targets-file ./runs/eth-live/live-filter/live-targets.txt \
+  --out ./runs/eth-live/runtime-precheck.json \
+  --rpc-url https://ethereum-rpc.publicnode.com
+```
+
+Use it during a scan:
 
 ```bash
 python scripts/smart-contract-batch-scan.py ./sources \
   --out-dir ./runs/scan-with-precheck \
-  --precheck-json ./precheck.json
+  --precheck-json ./runs/eth-live/runtime-precheck.json
 ```
 
-The JSON should be keyed by contract address. It is used only to downgrade
-known initialized-state false positives. It does not replace manual review.
+Prechecks only downgrade known false-positive classes. They do not prove the
+contract is safe.
 
 ## Docker
-
-Build and run:
 
 ```bash
 docker compose build
 docker compose run --rm scanner --chain-id 1 --limit 10 --run-dir /runs/eth-mainnet-10
 ```
 
-The compose file mounts:
+Mounted paths:
 
-- `./runs` to `/runs`;
-- `./input` to `/input` as read-only.
+- `./runs` -> `/runs`
+- `./input` -> `/input` read-only
 
 ## Development
 
-Run regression before changing detector logic:
+Run this before changing detector logic:
 
 ```bash
 python tests/run_regression.py
@@ -266,35 +368,31 @@ Severity: critical=2 high=2 medium=14 low=13 info=0
 Regression OK
 ```
 
-The two expected critical regression cases are synthetic:
+Expected synthetic critical cases:
 
-- `FinanceBank.Collect` - call-before-accounting reentrancy pattern.
-- `MockPoolManager.take` - unguarded external token movement pattern.
+- `FinanceBank.Collect`
+- `MockPoolManager.take`
 
-If a change alters these counts, update or add fixtures and explain why the new
-behavior is safer.
+If the counts change, update or add fixtures and explain the behavior change in
+the commit.
 
 ## Responsible Use
 
-Do not publish raw unresolved scan outputs against live third-party contracts as
-confirmed vulnerabilities. The outputs are leads for manual analysis.
+Do not publish unresolved output as a confirmed vulnerability. Before reporting
+anything externally, verify authorization, runtime/source match, current state,
+attacker preconditions, duplicate status, and program rules.
 
-Before reporting anything externally, verify:
+## Limits
 
-- authorization and scope;
-- runtime/source match;
-- current on-chain state;
-- funds-at-risk and attacker preconditions;
-- whether the issue is already known, accepted, patched, or out of scope.
-
-## Limitations
-
-- Static analysis is heuristic and intentionally conservative.
-- Source bundles may contain non-runtime files.
-- Public RPC endpoints can rate-limit, omit methods, or return inconsistent
-  errors.
+- Static analysis is heuristic.
+- Runtime prechecks only cover known false-positive classes.
+- Token filters are chain-specific and can go stale.
+- Source bundles can include non-runtime files.
+- Public RPC endpoints can rate-limit or omit methods.
 - The tool does not model full protocol economics.
-- Severity labels are triage labels, not CVSS or bug bounty severity.
+- Solana support is loader-event monitoring and value-proximity triage, not a
+  Rust/Anchor analyzer.
+- Severity labels are triage labels, not CVSS or bounty severity.
 
 ## License
 

@@ -433,6 +433,16 @@ def load_precheck_states(path_raw: str | None) -> dict[str, dict[str, object]]:
     return states
 
 
+def precheck_has_nonzero_address(precheck_state: dict[str, object] | None, key: str) -> bool:
+    if not precheck_state:
+        return False
+    value = precheck_state.get(key)
+    if not isinstance(value, str):
+        return False
+    normalized = value.lower()
+    return bool(re.fullmatch(r"0x[a-f0-9]{40}", normalized)) and int(normalized, 16) != 0
+
+
 def address_from_path_label(path_label: str) -> str | None:
     normalized = path_label.replace("\\", "/").lower()
     match = re.search(r"/sources/\d+/(0x[a-f0-9]{40})(?:/|$)", f"/{normalized}")
@@ -3016,13 +3026,26 @@ def scan_solidity_file(
                         "called by arbitrary accounts."
                     )
                 elif is_standard_proxy_initializer(block, text, path_label):
-                    severity = "medium"
-                    confidence = "low"
-                    signal = "Standard proxy initializer requires implementation-slot precheck."
-                    manual_check = (
-                        "Read EIP-1967 implementation storage or proxy metadata; "
-                        "nonzero implementation usually means initialized."
-                    )
+                    if precheck_has_nonzero_address(
+                        precheck_state, "implementationSlot"
+                    ) or precheck_has_nonzero_address(precheck_state, "beaconSlot"):
+                        severity = "low"
+                        confidence = "low"
+                        funds_at_risk = False
+                        signal = "Standard proxy initializer is already consumed by read-only implementation-slot precheck."
+                        manual_check = (
+                            "EIP-1967 implementation or beacon storage is nonzero; "
+                            "keep as checked proxy-initializer signal unless another "
+                            "path can reset implementation state."
+                        )
+                    else:
+                        severity = "medium"
+                        confidence = "low"
+                        signal = "Standard proxy initializer requires implementation-slot precheck."
+                        manual_check = (
+                            "Read EIP-1967 implementation storage or proxy metadata; "
+                            "nonzero implementation usually means initialized."
+                        )
                 elif standard_amm_function:
                     severity = "medium"
                     confidence = "low"

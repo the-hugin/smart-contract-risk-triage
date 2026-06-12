@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Filter Ethereum contracts by passive liveness signals.
+"""Filter EVM contracts by passive liveness signals.
 
 Signals:
 - native ETH balance
@@ -74,6 +74,20 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument("--balance-batch-size", type=int, default=100)
     parser.add_argument("--token-batch-size", type=int, default=80)
+    parser.add_argument(
+        "--token-threshold",
+        action="append",
+        default=[],
+        metavar="SYMBOL=AMOUNT",
+        help="Override major-token keep threshold, e.g. WETH=10 or USDC=16600.",
+    )
+    parser.add_argument(
+        "--token",
+        action="append",
+        default=[],
+        metavar="ADDRESS=SYMBOL:DECIMALS:THRESHOLD",
+        help="Use a custom token balance filter. Replaces default Ethereum token list when provided.",
+    )
     parser.add_argument("--logs-address-batch-size", type=int, default=5)
     parser.add_argument("--request-delay", type=float, default=0.05)
     parser.add_argument("--timeout-seconds", type=float, default=45.0)
@@ -81,6 +95,66 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--skip-token-balances", action="store_true")
     parser.add_argument("--skip-logs", action="store_true")
     return parser.parse_args(argv)
+
+
+def parse_token_specs(specs: list[str]) -> dict[str, tuple[str, int, float]]:
+    tokens: dict[str, tuple[str, int, float]] = {}
+    for raw in specs:
+        if "=" not in raw:
+            raise ValueError(
+                f"invalid --token {raw!r}; expected ADDRESS=SYMBOL:DECIMALS:THRESHOLD"
+            )
+        address_raw, config_raw = raw.split("=", 1)
+        address = address_raw.strip()
+        if not ADDRESS_RE.match(address):
+            raise ValueError(f"invalid token address in --token: {address!r}")
+        parts = [part.strip() for part in config_raw.split(":")]
+        if len(parts) != 3 or not parts[0]:
+            raise ValueError(
+                f"invalid --token {raw!r}; expected ADDRESS=SYMBOL:DECIMALS:THRESHOLD"
+            )
+        symbol = parts[0]
+        try:
+            decimals = int(parts[1])
+            threshold = float(parts[2])
+        except ValueError as exc:
+            raise ValueError(f"invalid --token numeric config: {raw!r}") from exc
+        if decimals < 0 or decimals > 36:
+            raise ValueError(f"invalid token decimals in --token: {raw!r}")
+        if not math.isfinite(threshold) or threshold < 0:
+            raise ValueError(f"invalid token threshold in --token: {raw!r}")
+        tokens[address] = (symbol, decimals, threshold)
+    return tokens
+
+
+def apply_token_threshold_overrides(overrides: list[str]) -> dict[str, tuple[str, int, float]]:
+    updated = dict(MAJOR_TOKENS)
+    by_symbol = {config[0].upper(): token for token, config in updated.items()}
+    valid = ", ".join(sorted(by_symbol))
+    for raw in overrides:
+        if "=" not in raw:
+            raise ValueError(f"invalid --token-threshold {raw!r}; expected SYMBOL=AMOUNT")
+        symbol_raw, amount_raw = raw.split("=", 1)
+        symbol = symbol_raw.strip().upper()
+        if symbol not in by_symbol:
+            raise ValueError(f"unknown token symbol {symbol!r}; valid: {valid}")
+        try:
+            amount = float(amount_raw)
+        except ValueError as exc:
+            raise ValueError(f"invalid threshold amount for {symbol}: {amount_raw!r}") from exc
+        if not math.isfinite(amount) or amount < 0:
+            raise ValueError(f"invalid threshold amount for {symbol}: {amount_raw!r}")
+        token = by_symbol[symbol]
+        original_symbol, decimals, _threshold = updated[token]
+        updated[token] = (original_symbol, decimals, amount)
+    return updated
+
+
+def token_threshold_summary() -> dict[str, float]:
+    return {
+        symbol: threshold_units
+        for _token, (symbol, _decimals, threshold_units) in MAJOR_TOKENS.items()
+    }
 
 
 def chunks(items: list[Any], size: int) -> Iterable[list[Any]]:
@@ -131,7 +205,7 @@ def rpc_request(payload: Any, args: argparse.Namespace) -> Any:
             data=data,
             headers={
                 "Content-Type": "application/json",
-                "User-Agent": "evm-risk-triage-live-filter/0.1",
+                "User-Agent": "smart-contract-risk-triage-live-filter/0.2",
             },
         )
         try:
@@ -165,6 +239,13 @@ def rpc_batch(calls: list[tuple[str, list[Any], str]], args: argparse.Namespace)
         for index, (method, params, _key) in enumerate(calls, 1)
     ]
     response = rpc_request(payload, args)
+    if isinstance(response, dict) and "error" in response and len(calls) > 1:
+        message = str(response.get("error", {}).get("message", "")).lower()
+        if "batch" in message and ("too many" in message or "limit" in message):
+            midpoint = len(calls) // 2
+            result = rpc_batch(calls[:midpoint], args)
+            result.update(rpc_batch(calls[midpoint:], args))
+            return result
     if not isinstance(response, list):
         raise RuntimeError(f"unexpected batch response: {response}")
     by_id = {item.get("id"): item for item in response if isinstance(item, dict)}
@@ -192,6 +273,8 @@ def balance_of_data(address: str) -> str:
 
 def hex_to_int(value: Any) -> int:
     if not isinstance(value, str) or not value.startswith("0x"):
+        return 0
+    if value == "0x":
         return 0
     return int(value, 16)
 
@@ -378,6 +461,14 @@ def write_jsonl(path: Path, rows: Iterable[dict[str, Any]]) -> None:
 
 def main(argv: list[str]) -> int:
     args = parse_args(argv)
+    global MAJOR_TOKENS
+    try:
+        if args.token:
+            MAJOR_TOKENS = parse_token_specs(args.token)
+        MAJOR_TOKENS = apply_token_threshold_overrides(args.token_threshold)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
     targets = read_targets(Path(args.targets_file).resolve())
     exclude_keys: set[str] = set()
     for exclude_file in args.exclude_targets_file:
@@ -493,6 +584,7 @@ def main(argv: list[str]) -> int:
         "fromBlock": from_block,
         "latestBlock": latest_block,
         "ethMinWei": str(args.eth_min_wei),
+        "majorTokenThresholds": token_threshold_summary(),
         "balanceScoreWeighted": bool(args.balance_score_weight),
         "reasonCounts": dict(reason_counts),
         "logErrorCount": len(log_errors),

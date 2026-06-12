@@ -14,6 +14,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Live-filtered ETH contract batch.")
     parser.add_argument("--chain-id", default="1")
     parser.add_argument("--candidate-limit", type=int, default=50000)
+    parser.add_argument("--candidate-after-match-id")
     parser.add_argument("--exclude-targets-file", action="append", default=[])
     parser.add_argument("--keep-limit", type=int, default=5000)
     parser.add_argument("--run-dir")
@@ -32,7 +33,25 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--logs-address-batch-size", type=int, default=5)
     parser.add_argument("--balance-batch-size", type=int, default=100)
     parser.add_argument("--token-batch-size", type=int, default=80)
+    parser.add_argument("--token-threshold", action="append", default=[])
+    parser.add_argument(
+        "--token",
+        action="append",
+        default=[],
+        metavar="ADDRESS=SYMBOL:DECIMALS:THRESHOLD",
+        help="Use a custom token balance filter. Replaces default Ethereum token list when provided.",
+    )
     parser.add_argument("--critical-limit", type=int, default=1000)
+    parser.add_argument(
+        "--runtime-precheck",
+        action="store_true",
+        help="Collect read-only runtime precheck state and pass it to the static scanner.",
+    )
+    parser.add_argument(
+        "--high-value-triage",
+        action="store_true",
+        help="Build a reliability-ranked high-value triage report after static scan.",
+    )
     parser.add_argument("--skip-token-balances", action="store_true")
     parser.add_argument("--skip-logs", action="store_true")
     return parser.parse_args(argv)
@@ -60,8 +79,7 @@ def main(argv: list[str]) -> int:
     live_dir = run_dir / "live-filter"
     scan_dir = run_dir / "scan"
 
-    run(
-        [
+    list_cmd = [
             sys.executable,
             str(scripts / "eth-sourcify-list.py"),
             "--chain-id",
@@ -72,9 +90,10 @@ def main(argv: list[str]) -> int:
             str(candidates),
             "--jsonl",
             str(candidate_meta),
-        ],
-        workspace,
-    )
+    ]
+    if args.candidate_after_match_id:
+        list_cmd.extend(["--after-match-id", str(args.candidate_after_match_id)])
+    run(list_cmd, workspace)
 
     filter_cmd = [
         sys.executable,
@@ -108,6 +127,10 @@ def main(argv: list[str]) -> int:
     ]
     for exclude_file in args.exclude_targets_file:
         filter_cmd.extend(["--exclude-targets-file", exclude_file])
+    for token_threshold in args.token_threshold:
+        filter_cmd.extend(["--token-threshold", token_threshold])
+    for token in args.token:
+        filter_cmd.extend(["--token", token])
     if args.skip_token_balances:
         filter_cmd.append("--skip-token-balances")
     if args.skip_logs:
@@ -123,6 +146,26 @@ def main(argv: list[str]) -> int:
     run(filter_cmd, workspace)
 
     live_targets = live_dir / "live-targets.txt"
+    precheck_json = run_dir / "runtime-precheck.json"
+    if args.runtime_precheck:
+        run(
+            [
+                sys.executable,
+                str(scripts / "eth-runtime-precheck.py"),
+                "--targets-file",
+                str(live_targets),
+                "--out",
+                str(precheck_json),
+                "--rpc-url",
+                args.rpc_url,
+                "--request-delay",
+                str(args.request_delay),
+                "--timeout-seconds",
+                str(args.filter_timeout_seconds),
+            ],
+            workspace,
+        )
+
     run(
         [
             sys.executable,
@@ -139,19 +182,32 @@ def main(argv: list[str]) -> int:
         workspace,
     )
 
+    scan_cmd = [
+        sys.executable,
+        str(scripts / "smart-contract-batch-scan.py"),
+        "--input-list",
+        str(run_dir / "scan-inputs.txt"),
+        "--out-dir",
+        str(scan_dir),
+        "--critical-limit",
+        str(args.critical_limit),
+    ]
+    if args.runtime_precheck:
+        scan_cmd.extend(["--precheck-json", str(precheck_json)])
     run(
-        [
-            sys.executable,
-            str(scripts / "smart-contract-batch-scan.py"),
-            "--input-list",
-            str(run_dir / "scan-inputs.txt"),
-            "--out-dir",
-            str(scan_dir),
-            "--critical-limit",
-            str(args.critical_limit),
-        ],
+        scan_cmd,
         workspace,
     )
+    if args.high_value_triage:
+        run(
+            [
+                sys.executable,
+                str(scripts / "eth-high-value-triage.py"),
+                "--run-dir",
+                str(run_dir),
+            ],
+            workspace,
+        )
     print(f"Run complete: {run_dir}")
     return 0
 
