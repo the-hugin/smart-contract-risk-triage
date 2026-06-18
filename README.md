@@ -32,6 +32,10 @@ EVM:
   init/upgrade, delegatecall, signature, oracle, and token-transfer patterns.
 - Read-only prechecks for common false positives: EIP-1967 implementation or
   beacon slots, Gnosis Safe threshold, AMM pool state, and owner calls.
+- Post-detection validation gates that separate candidates from watch-only and
+  false-positive rows before monitor alerts are selected.
+- Candidate evidence packs and an append-only manual verdict loop for analyst
+  feedback.
 - Config-driven monitors for Ethereum, Base, Arbitrum, Optimism, Polygon, BNB
   Smart Chain, Avalanche, Linea, Scroll, zkSync Era, Gnosis, Blast, Mantle, and
   Celo.
@@ -64,6 +68,7 @@ scripts/
   eth-runtime-precheck.py
   eth-high-value-triage.py
   eth-continuous-monitor.py
+  smart-contract-add-verdict.py
   evm-monitor-config.py
   solana-program-monitor.py
   non-evm-monitor-config.py
@@ -235,6 +240,10 @@ Telegram alerts are off by default in the public config. To enable them, set:
 The chat id must be a positive numeric private chat id. The monitor rejects
 channel and group-style ids before calling `sendMessage`.
 
+EVM monitor alerts are selected only from post-validation `candidate` rows.
+`false-positive`, `watch-only`, and `needs-review` rows stay in triage artifacts
+for review without triggering Telegram.
+
 ## Solana Monitor
 
 List non-EVM chains:
@@ -286,6 +295,15 @@ Runtime and high-value EVM triage:
 - `runtime-precheck.json`
 - `triage/high-value-triage.md`
 - `triage/high-value-triage.jsonl`
+- `triage/high-value-triage-summary.json`
+- `triage/candidate-evidence-packs.md`
+- `triage/candidate-evidence-packs.json`
+
+Manual EVM verdicts:
+
+- `reports/smart-contract-verdicts.jsonl` by default
+- custom JSONL paths through `eth-high-value-triage.py --verdicts-file`
+- append helper: `scripts/smart-contract-add-verdict.py`
 
 Sourcify intake:
 
@@ -307,6 +325,8 @@ For EVM findings:
 - `category` is the risk class.
 - `funds_at_risk` means the pattern appears to touch value movement.
 - `manual_check` says what to verify next.
+- `validation.verdict` is the alert gate: only `candidate` is alertable.
+- candidate evidence packs describe the positive gate and the next manual check.
 
 Review order:
 
@@ -368,9 +388,9 @@ python scripts/public-sanity-check.py
 Expected baseline:
 
 ```text
-Scanned files: 14
-Findings: 31
-Severity: critical=2 high=2 medium=14 low=13 info=0
+Scanned files: 16
+Findings: 39
+Severity: critical=8 high=3 medium=15 low=13 info=0
 Regression OK
 ```
 
@@ -378,6 +398,7 @@ Expected synthetic critical cases:
 
 - `FinanceBank.Collect`
 - `MockPoolManager.take`
+- address-substitution paths in `AddressSubstitution.sol`
 
 If the counts change, update or add fixtures and explain the behavior change in
 the commit.

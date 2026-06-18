@@ -7,6 +7,8 @@ review value and false-positive reduction, not by chain count.
 
 - EVM Sourcify intake and local source scanning.
 - EVM balance, token, recent-log, runtime-precheck, and high-value triage flows.
+- Aggressive post-detection validation, candidate-only alert gates, candidate
+  evidence packs, and append-only manual verdict feedback.
 - Continuous EVM monitors for Ethereum, Base, Arbitrum, Optimism, Polygon, BNB
   Smart Chain, Avalanche, Linea, Scroll, zkSync Era, Gnosis, Blast, Mantle, and
   Celo.
@@ -61,6 +63,9 @@ New modules should keep the same review surfaces where possible:
 - `live-filter-summary.json`
 - `triage/high-value-triage.jsonl`
 - `triage/high-value-triage.md`
+- `triage/candidate-evidence-packs.json`
+- `triage/candidate-evidence-packs.md`
+- optional manual verdict JSONL
 - compact monitor status files
 
 The chain-specific parser can differ. The operator workflow should not.

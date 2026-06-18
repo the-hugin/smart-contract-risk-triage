@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Continuous passive monitor for newly verified EVM contracts.
+"""Continuous passive monitor for newly verified Ethereum contracts.
 
 The monitor polls Sourcify for contracts newer than the saved cursor, applies
 the high-value live-balance filter, scans only kept contracts, and deletes
@@ -44,7 +44,6 @@ CHAIN_LABELS = {
     "81457": "Blast",
 }
 ALERT_TRIAGE_CLASSES = {"triage-now", "review"}
-ALERT_SEVERITIES = {"critical", "high"}
 PRIVATE_TELEGRAM_CHAT_RE = re.compile(r"^[1-9][0-9]*$")
 
 
@@ -68,7 +67,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--rpc-url", default="https://rpc.mevblocker.io")
     parser.add_argument("--recent-blocks", type=int, default=2000)
     parser.add_argument("--keep-limit", type=int, default=500)
-    parser.add_argument("--eth-min-wei", type=int, default=300000000000000000)
+    parser.add_argument("--eth-min-wei", type=int, default=10**19)
     parser.add_argument("--token-threshold", action="append", default=[])
     parser.add_argument(
         "--token",
@@ -109,7 +108,7 @@ def http_json(url: str, timeout_seconds: float, retries: int) -> Any:
             url,
             headers={
                 "Accept": "application/json",
-                "User-Agent": "smart-contract-risk-triage-evm-monitor/0.2",
+                "User-Agent": "smart-contract-risk-triage-evm-monitor/1.0",
             },
         )
         try:
@@ -341,7 +340,10 @@ def alert_rows(run_dir: Path, limit: int) -> list[dict[str, Any]]:
         row
         for row in rows
         if str(row.get("triageClass") or "") in ALERT_TRIAGE_CLASSES
-        or str(row.get("severity") or "").lower() in ALERT_SEVERITIES
+        and (
+            isinstance(row.get("validation"), dict)
+            and row["validation"].get("verdict") == "candidate"
+        )
     ]
 
     def sort_key(row: dict[str, Any]) -> tuple[int, int]:
@@ -356,34 +358,45 @@ def alert_rows(run_dir: Path, limit: int) -> list[dict[str, Any]]:
     return selected[: max(1, limit)]
 
 
+def validation_reason(row: dict[str, Any]) -> str:
+    validation = row.get("validation") if isinstance(row.get("validation"), dict) else {}
+    verdict = str(validation.get("verdict") or "needs-review")
+    tests = validation.get("tests") if isinstance(validation.get("tests"), list) else []
+    if tests and isinstance(tests[0], dict):
+        reason = compact(tests[0].get("reason"), 150)
+        name = compact(tests[0].get("name"), 60)
+        return f"{verdict}: {name} - {reason}" if reason else f"{verdict}: {name}"
+    return verdict
+
+
 def format_alert_message(chain_id: str, run_dir: Path, rows: list[dict[str, Any]], event: dict[str, Any]) -> str:
     chain_label = str(event.get("chainLabel") or CHAIN_LABELS.get(str(chain_id), f"chain {chain_id}"))
-    header = [
-        "Smart-contract alert",
+    lines = [
+        "Smart-contract alert: action needed",
         f"Network: {chain_label} ({chain_id})",
-        f"Status: {event.get('status')}",
-        f"New contracts: {event.get('newTargetCount')}; kept: {event.get('keptCount')}",
+        f"Batch: new={event.get('newTargetCount')} kept={event.get('keptCount')} alert_rows={len(rows)}",
     ]
-    body: list[str] = []
     for index, row in enumerate(rows, 1):
         live = row.get("live") if isinstance(row.get("live"), dict) else {}
-        body.extend(
+        lines.extend(
             [
                 "",
-                f"{index}. {str(row.get('triageClass') or 'alert')} / {str(row.get('severity') or 'unknown')}",
-                f"Address: {row.get('address')}",
-                f"Category: {row.get('category')} / {row.get('function')}:{row.get('line')}",
-                f"Balance: {format_balances(live)}",
-                f"Signal: {compact(row.get('signal'), 240)}",
-                f"Manual: {compact(row.get('manualCheck'), 220)}",
+                f"{index}. {str(row.get('triageClass') or 'review').upper()} / {str(row.get('severity') or 'unknown')}",
+                f"{row.get('address')} | {row.get('category')}::{row.get('function')}:{row.get('line')}",
+                f"Why: {validation_reason(row)}",
+                f"Value: {format_balances(live)}",
+                f"Signal: {compact(row.get('signal'), 150)}",
             ]
         )
-    footer = [
-        "",
-        f"Artifact: {run_dir / 'triage' / 'high-value-triage.md'}",
-        "Boundary: passive signal only; no PoC or transaction steps.",
-    ]
-    message = "\n".join(header + body + footer)
+    lines.extend(
+        [
+            "",
+            f"Evidence pack: {run_dir / 'triage' / 'candidate-evidence-packs.md'}",
+            f"Artifact: {run_dir / 'triage' / 'high-value-triage.md'}",
+            "Boundary: passive signal only; no PoC or transaction steps.",
+        ]
+    )
+    message = "\n".join(lines)
     return message[:3900]
 
 
@@ -580,14 +593,7 @@ def pipeline(args: argparse.Namespace, workspace: Path, state_dir: Path, run_dir
 
     scan_counts = count_scan_findings(scan_dir / "all-signals.jsonl")
     triage_summary = read_json(run_dir / "triage" / "high-value-triage-summary.json")
-    triage_counts = triage_summary.get("triageClassCounts") if isinstance(triage_summary.get("triageClassCounts"), dict) else {}
-    severity_counts = scan_counts.get("severityCounts") if isinstance(scan_counts.get("severityCounts"), dict) else {}
-    interesting = (
-        int(triage_counts.get("triage-now") or 0) > 0
-        or int(triage_counts.get("review") or 0) > 0
-        or int(severity_counts.get("critical") or 0) > 0
-        or int(severity_counts.get("high") or 0) > 0
-    )
+    interesting = bool(alert_rows(run_dir, args.telegram_alert_top))
     result.update(
         {
             "status": "interesting" if interesting else "uninteresting",
@@ -604,12 +610,12 @@ def main(argv: list[str]) -> int:
     args = parse_args(argv)
     if not args.token and not args.token_threshold:
         args.token_threshold = [
-            "WETH=0.3",
-            "stETH=0.3",
-            "WBTC=0.008",
-            "USDC=500",
-            "USDT=500",
-            "DAI=500",
+            "WETH=10",
+            "stETH=10",
+            "WBTC=0.264",
+            "USDC=16500",
+            "USDT=16500",
+            "DAI=16500",
         ]
     workspace = Path(args.workspace).resolve()
     runs_root = workspace / "runs"

@@ -1,6 +1,6 @@
 [project]
 name = "smart-contract-risk-triage"
-version = "0.2.0"
+version = "0.3.0"
 description = "Passive multi-chain smart-contract triage with funds-at-risk prioritization."
 readme = "README.md"
 requires-python = ">=3.11"

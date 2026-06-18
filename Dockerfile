@@ -13,6 +13,7 @@ COPY scripts/eth-live-contract-filter.py /app/scripts/eth-live-contract-filter.p
 COPY scripts/eth-runtime-precheck.py /app/scripts/eth-runtime-precheck.py
 COPY scripts/eth-high-value-triage.py /app/scripts/eth-high-value-triage.py
 COPY scripts/eth-continuous-monitor.py /app/scripts/eth-continuous-monitor.py
+COPY scripts/smart-contract-add-verdict.py /app/scripts/smart-contract-add-verdict.py
 COPY scripts/evm-monitor-config.py /app/scripts/evm-monitor-config.py
 COPY scripts/solana-program-monitor.py /app/scripts/solana-program-monitor.py
 COPY scripts/non-evm-monitor-config.py /app/scripts/non-evm-monitor-config.py

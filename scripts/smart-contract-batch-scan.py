@@ -91,63 +91,6 @@ ADMIN_NAMES = {
     "init",
 }
 
-CRITICAL_ADDRESS_FIELDS = {
-    "admin",
-    "asset",
-    "beacon",
-    "beneficiary",
-    "bridge",
-    "collector",
-    "controller",
-    "delegate",
-    "delegatecontract",
-    "factory",
-    "feecollector",
-    "feereceiver",
-    "feerecipient",
-    "forwarder",
-    "gateway",
-    "governance",
-    "guardian",
-    "implementation",
-    "impl",
-    "library",
-    "logic",
-    "manager",
-    "minter",
-    "operator",
-    "oracle",
-    "owner",
-    "permit2",
-    "poolmanager",
-    "priceoracle",
-    "recipient",
-    "returnaddress",
-    "router",
-    "spender",
-    "sweeper",
-    "token",
-    "treasury",
-    "trustedforwarder",
-    "underlying",
-    "upgrader",
-    "vault",
-    "walletlibrary",
-    "withdrawaladdress",
-}
-
-RECIPIENT_ADDRESS_PARAMETER_MARKERS = (
-    "beneficiary",
-    "dst",
-    "receiver",
-    "recipient",
-    "returnaddress",
-    "target",
-    "to",
-    "wallet",
-    "withdrawaladdress",
-)
-
 SOL_ACCESS_MARKERS = (
     "onlyOwner",
     "onlyRole",
@@ -389,7 +332,6 @@ class Finding:
             score += 30
         if self.category in {
             "access-control",
-            "address-control",
             "upgradeability",
             "reentrancy",
             "signature-replay",
@@ -452,7 +394,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         "--precheck-json",
         help=(
             "Optional read-only runtime precheck JSON keyed by contract address. "
-            "Used only to downgrade already-initialized Safe/pool/proxy/stream signals."
+            "Used only to downgrade already-initialized Safe/pool signals."
         ),
     )
     return parser.parse_args(argv)
@@ -499,29 +441,6 @@ def precheck_has_nonzero_address(precheck_state: dict[str, object] | None, key: 
         return False
     normalized = value.lower()
     return bool(re.fullmatch(r"0x[a-f0-9]{40}", normalized)) and int(normalized, 16) != 0
-
-
-def precheck_positive_int(precheck_state: dict[str, object] | None, key: str) -> int:
-    if not precheck_state:
-        return 0
-    value = precheck_state.get(key)
-    try:
-        return int(str(value), 0)
-    except (TypeError, ValueError):
-        return 0
-
-
-def precheck_truthy(precheck_state: dict[str, object] | None, key: str) -> bool:
-    if not precheck_state:
-        return False
-    value = precheck_state.get(key)
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, (int, float)):
-        return value != 0
-    if isinstance(value, str):
-        return value.lower() in {"1", "true", "yes"}
-    return False
 
 
 def address_from_path_label(path_label: str) -> str | None:
@@ -2139,6 +2058,14 @@ def is_factory_gated_initializer(block: FunctionBlock) -> bool:
     )
 
 
+def has_initializer_guard_markers(block: FunctionBlock) -> bool:
+    lowered = f"{block.header}\n{block.body_text}".lower()
+    state_patterns = (
+        r"\b(require|if)\s*\([^;]*(?:initialized|_initialized|initialization|initversion|_init)\b",
+    )
+    return bool(re.search(state_patterns[0], lowered))
+
+
 def is_entrypoint_or_message_gated(block: FunctionBlock) -> bool:
     lowered = block.body_text.lower()
     return (
@@ -2259,8 +2186,35 @@ def is_low_priority_public_config(block: FunctionBlock) -> bool:
     )
 
 
+def function_parameter_names(header: str) -> set[str]:
+    match = re.search(r"\((.*)\)", header, flags=re.DOTALL)
+    if not match:
+        return set()
+    raw_parameters = match.group(1).strip()
+    if not raw_parameters:
+        return set()
+    parameter_names: set[str] = set()
+    for item in split_top_level_arguments(raw_parameters):
+        normalized = re.sub(r"\s+", " ", item.strip())
+        if not normalized:
+            continue
+        if normalized.startswith("payable"):
+            continue
+        token = normalized.split()[-1].split("=")[0].strip()
+        token = token.rstrip(";")
+        if not token:
+            continue
+        token = re.sub(r"\[.*\]", "", token)
+        token = token.rstrip("]")
+        token = token.lstrip("*")
+        if re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", token):
+            parameter_names.add(token.lower())
+    return parameter_names
+
+
 def is_fixed_recipient_money_flow(block: FunctionBlock) -> bool:
     lowered = block.body_text.lower()
+    parameter_names = function_parameter_names(block.header)
     fixed_recipient_markers = (
         "owneraddress",
         "ownerpayout",
@@ -2306,221 +2260,79 @@ def is_fixed_recipient_money_flow(block: FunctionBlock) -> bool:
         ".transferFrom(",
         ".burn(",
     )
-    return contains_any(block.body_text, transfer_markers)
-
-
-def solidity_parameter_text(header: str, function_name: str) -> str | None:
-    match = re.search(
-        rf"\bfunction\s+{re.escape(function_name)}\s*\((.*?)\)",
-        header,
-        flags=re.IGNORECASE | re.DOTALL,
-    )
-    return match.group(1) if match else None
-
-
-def split_top_level_commas(text: str) -> list[str]:
-    parts: list[str] = []
-    start = 0
-    depth = 0
-    for index, char in enumerate(text):
-        if char in "([{":
-            depth += 1
-        elif char in ")]}" and depth:
-            depth -= 1
-        elif char == "," and depth == 0:
-            parts.append(text[start:index].strip())
-            start = index + 1
-    tail = text[start:].strip()
-    if tail:
-        parts.append(tail)
-    return parts
-
-
-def solidity_address_parameter_names(block: FunctionBlock) -> list[str]:
-    params = solidity_parameter_text(block.header, block.name)
-    if params is None:
-        return []
-    names: list[str] = []
-    for part in split_top_level_commas(params):
-        match = re.search(
-            r"\baddress(?:\s+payable)?(?:\s+(?:memory|calldata|storage))?\s+([A-Za-z_][A-Za-z0-9_]*)\b",
-            part,
-            flags=re.IGNORECASE,
-        )
-        if match:
-            names.append(match.group(1))
-    return names
-
-
-def critical_address_assignment(block: FunctionBlock) -> tuple[int, str, str] | None:
-    for line_no, line in block.lines:
-        clean = line.strip()
-        lowered = clean.lower()
-        if "=" not in lowered or "==" in lowered or "!=" in lowered or ">=" in lowered or "<=" in lowered:
+    if not contains_any(block.body_text, transfer_markers):
+        return False
+    for _, line in block.lines:
+        clean = line.strip().lower()
+        if not clean or clean.startswith("function "):
             continue
-        for field in sorted(CRITICAL_ADDRESS_FIELDS, key=len, reverse=True):
-            escaped = re.escape(field)
-            if re.search(rf"\baddress(?:\s+payable)?\s+{escaped}\s*=", lowered):
+        for call_name in ("transfer", "transferFrom", "safetransfer", "safetransferfrom"):
+            args = extract_first_call_arguments(clean, call_name)
+            if args is None:
                 continue
-            if re.search(rf"(?<![A-Za-z0-9_]){escaped}(?![A-Za-z0-9_])\s*=(?!=)", lowered):
-                return line_no, field, clean
-    return None
+            call_args = split_top_level_arguments(args)
+            if call_name in {"transfer", "safetransfer"}:
+                if not call_args:
+                    return False
+                recipient = call_args[0]
+                if is_token_transfer_recipient_user_controlled(recipient, parameter_names):
+                    return False
+            else:
+                if len(call_args) < 2:
+                    return False
+                recipient = call_args[1]
+                if is_token_transfer_recipient_user_controlled(recipient, parameter_names):
+                    return False
+    return True
 
 
-def solidity_has_no_parameters(block: FunctionBlock) -> bool:
-    params = solidity_parameter_text(block.header, block.name)
-    return params is not None and re.sub(r"\s+", "", params) == ""
-
-
-def solidity_declares_fixed_address(file_text: str, name: str) -> bool:
-    escaped = re.escape(name)
-    lowered = file_text.lower()
-    if re.search(rf"\baddress(?:\s+payable)?\s+(?:public\s+)?immutable\s+{escaped}\b", lowered):
+def is_token_transfer_recipient_user_controlled(
+    recipient_expression: str, parameter_names: set[str]
+) -> bool:
+    recipient = recipient_expression.strip().lower()
+    if not recipient:
         return True
-    if re.search(rf"\b{escaped}\s*=\s*_[a-z0-9_]*{escaped}\b", lowered):
+    if any(
+        marker in recipient
+        for marker in ("msg.sender", "_msgsender()", "tx.origin")
+    ):
+        return False
+    if recipient in {"to", "_to", "recipient", "_recipient", "receiver", "_receiver", "beneficiary", "_beneficiary"}:
         return True
-    return False
+    return any(
+        re.search(rf"\b{re.escape(param)}\b", recipient)
+        for param in parameter_names
+    )
 
 
-def transfer_routes_to_named_recipient(body: str, names: Iterable[str]) -> bool:
-    compact = re.sub(r"\s+", "", body.lower())
-    for raw_name in names:
-        name = raw_name.lower()
-        patterns = (
-            f".transfer({name},",
-            f".safetransfer({name},",
-            f".transfer(payable({name})",
-            f"payable({name}).transfer(",
-            f"payable({name}).send(",
-            f"{name}.transfer(",
-            f"{name}.send(",
-            f"{name}.call{{value:",
-            f"payable({name}).call{{value:",
-        )
-        if any(pattern in compact for pattern in patterns):
+def is_function_call_with_user_controlled_argument(
+    lines: list[tuple[int, str]], call_name: str, body_parameter_names: set[str]
+) -> bool:
+    for _, line in lines:
+        clean = line.strip().lower()
+        if f".{call_name}" not in clean:
+            continue
+        args = extract_first_call_arguments(clean, call_name)
+        if args is None:
+            continue
+        call_args = split_top_level_arguments(args)
+        if not call_args:
+            continue
+        target = call_args[0]
+        if any(
+            marker in target
+            for marker in ("msg.sender", "_msgsender()", "tx.origin", "calldata", "msg.data")
+        ):
             return True
+        if target in body_parameter_names:
+            return True
+        for parameter_name in body_parameter_names:
+            if re.search(rf"\b{re.escape(parameter_name)}\b", target):
+                return True
+        if not re.search(r"\b[a-z_][a-z0-9_]*\b", target):
+            return True
+        continue
     return False
-
-
-def transfer_routes_to_address_parameter(block: FunctionBlock) -> tuple[str, ...]:
-    routed: list[str] = []
-    for name in solidity_address_parameter_names(block):
-        lowered = name.lower()
-        recipient_like = lowered in RECIPIENT_ADDRESS_PARAMETER_MARKERS or any(
-            marker in lowered for marker in RECIPIENT_ADDRESS_PARAMETER_MARKERS
-        )
-        if recipient_like and transfer_routes_to_named_recipient(block.body_text, (name,)):
-            routed.append(name)
-    return tuple(routed)
-
-
-def transfer_routes_to_caller(body: str) -> bool:
-    compact = re.sub(r"\s+", "", body.lower())
-    caller_markers = (
-        ".transfer(msg.sender",
-        ".safetransfer(msg.sender",
-        ".transfer(_msgsender()",
-        ".safetransfer(_msgsender()",
-        "msg.sender.transfer(",
-        "msg.sender.send(",
-        "msg.sender.call{value:",
-        "payable(msg.sender).transfer(",
-        "payable(msg.sender).send(",
-        "payable(msg.sender).call{value:",
-    )
-    return any(marker in compact for marker in caller_markers)
-
-
-def is_fixed_recipient_stream_claim_flow(block: FunctionBlock, file_text: str) -> bool:
-    name = block.name.lower()
-    if "claim" not in name and "withdraw" not in name:
-        return False
-    lowered = block.body_text.lower()
-    if not solidity_has_external_transfer(block.body_text) or transfer_routes_to_caller(block.body_text):
-        return False
-    if not transfer_routes_to_named_recipient(block.body_text, ("recipient", "beneficiary")):
-        return False
-    if not (
-        solidity_declares_fixed_address(file_text, "recipient")
-        or solidity_declares_fixed_address(file_text, "beneficiary")
-    ):
-        return False
-    return any(
-        marker in lowered or marker in file_text.lower()
-        for marker in (
-            "stream",
-            "claimcooldown",
-            "lastclaimtimestamp",
-            "starttimestamp",
-            "vesting",
-            "recipient",
-        )
-    )
-
-
-def is_fixed_recipient_stream_sweep_flow(block: FunctionBlock, file_text: str) -> bool:
-    name = block.name.lower()
-    if "sweep" not in name and "remaining" not in name:
-        return False
-    lowered = block.body_text.lower()
-    if not solidity_has_external_transfer(block.body_text) or transfer_routes_to_caller(block.body_text):
-        return False
-    if not transfer_routes_to_named_recipient(block.body_text, ("returnaddress", "recipient", "beneficiary")):
-        return False
-    if not (
-        solidity_declares_fixed_address(file_text, "returnaddress")
-        or solidity_declares_fixed_address(file_text, "recipient")
-        or solidity_declares_fixed_address(file_text, "beneficiary")
-    ):
-        return False
-    return any(
-        marker in lowered or marker in file_text.lower()
-        for marker in (
-            "sweepcooldown",
-            "streamduration",
-            "streamend",
-            "minimumnoticeperiod",
-            "starttimestamp",
-            "vesting",
-        )
-    )
-
-
-def is_paramless_stream_initializer(block: FunctionBlock, file_text: str) -> bool:
-    if block.name.lower() not in {"initialize", "init"} or not solidity_has_no_parameters(block):
-        return False
-    lowered = block.body_text.lower()
-    if not any(marker in lowered for marker in ("starttimestamp", "lastclaimtimestamp", "initialized", "state")):
-        return False
-    if any(marker in lowered for marker in ("delegatecall", "selfdestruct")):
-        return False
-    if transfer_routes_to_caller(block.body_text):
-        return False
-    if re.search(
-        r"\b(owner|admin|recipient|returnaddress|treasury|oracle|implementation|factory|token)\s*=",
-        lowered,
-    ):
-        return False
-    stream_markers = (
-        "stream",
-        "claimcooldown",
-        "sweepcooldown",
-        "streamduration",
-        "minimumnoticeperiod",
-        "lastclaimtimestamp",
-        "starttimestamp",
-        "vesting",
-    )
-    return any(marker in lowered or marker in file_text.lower() for marker in stream_markers)
-
-
-def precheck_stream_initializer_consumed(precheck_state: dict[str, object] | None) -> bool:
-    return (
-        precheck_positive_int(precheck_state, "startTimestamp") > 0
-        or precheck_positive_int(precheck_state, "lastClaimTimestamp") > 0
-        or precheck_truthy(precheck_state, "initialized")
-        or precheck_truthy(precheck_state, "isInitialized")
-    )
 
 
 def is_keeper_incentive_flow(block: FunctionBlock) -> bool:
@@ -2622,6 +2434,97 @@ def is_cost_bound_payout(block: FunctionBlock) -> bool:
         or "pos.owner != msg.sender" in lowered
         or "positions[posid]" in lowered
     )
+
+
+def compact_solidity_text(value: str) -> str:
+    return re.sub(r"\s+", "", value.lower())
+
+
+def is_merkle_distributor_claim(block: FunctionBlock) -> bool:
+    if not block.name.lower().startswith("claim"):
+        return False
+    compact = compact_solidity_text(block.body_text)
+    has_merkle_gate = "merkleproof.verify" in compact and "merkleroot" in compact
+    has_claimed_write = "_setclaimed(index)" in compact or "claimedbitmap" in compact
+    pays_leaf_account = ".safetransfer(account," in compact or ".transfer(account," in compact
+    return has_merkle_gate and has_claimed_write and pays_leaf_account
+
+
+def is_permissionless_expired_order_cleanup(block: FunctionBlock) -> bool:
+    name = block.name.lower()
+    if "expired" not in name and "cleanup" not in name:
+        return False
+    compact = compact_solidity_text(block.body_text)
+    return (
+        "expired" in compact
+        and ("order.owner" in compact or "orders[orderid].owner" in compact)
+        and (
+            "status=orderstatus.expired" in compact
+            or ".status=expired" in compact
+            or "status=expired" in compact
+        )
+        and (
+            ".safetransfer(order.owner," in compact
+            or ".transfer(order.owner," in compact
+            or ".call{value:" in compact and "order.owner" in compact
+        )
+    )
+
+
+def is_claim_to_token_owner_flow(block: FunctionBlock, file_text: str) -> bool:
+    if "claim" not in block.name.lower():
+        return False
+    compact_body = compact_solidity_text(block.body_text)
+    compact_file = compact_solidity_text(file_text)
+    owner_lookup = "ownerof(tokenid)" in compact_body or "_ownerof(tokenid)" in compact_body
+    owner_payout = (
+        ".call{value:" in compact_body and ("owner" in compact_body or "owneraddr" in compact_body)
+    ) or any(
+        marker in compact_body
+        for marker in (
+            ".safetransfer(owner",
+            ".transfer(owner",
+            ".safetransfer(owneraddr",
+            ".transfer(owneraddr",
+        )
+    )
+    debt_update = any(marker in compact_body for marker in ("_setfeedebt(", "rewarddebt", "claimed"))
+    wrapper_to_owner_claim = (
+        "_claimone(tokenid)" in compact_body
+        and ("_ownerof(tokenid)" in compact_file or "ownerof(tokenid)" in compact_file)
+        and any(marker in compact_file for marker in ("_setfeedebt(", "rewarddebt", "claimed"))
+    )
+    return (owner_lookup and owner_payout and debt_update) or wrapper_to_owner_claim
+
+
+def is_reserved_dust_sweep(block: FunctionBlock) -> bool:
+    if "sweep" not in block.name.lower():
+        return False
+    compact = compact_solidity_text(block.body_text)
+    return (
+        "bountytreasury" in compact
+        and ("owedscaled" in compact or "pendingundistributed" in compact)
+        and ("deposit{value:" in compact or ".call{value:" in compact or ".transfer(" in compact)
+    )
+
+
+def is_caller_bounded_claim_loop(block: FunctionBlock) -> bool:
+    if "claim" not in block.name.lower():
+        return False
+    compact = compact_solidity_text(block.body_text)
+    owns_token_check = (
+        "ownerof(tokenid)!=msg.sender" in compact
+        or "ownerof(tokenid)==msg.sender" in compact
+        or "_ownerof(tokenid)!=msg.sender" in compact
+        or "_ownerof(tokenid)==msg.sender" in compact
+    )
+    caller_payout = (
+        "_pay(msg.sender" in compact
+        or ".transfer(msg.sender," in compact
+        or ".safetransfer(msg.sender," in compact
+    )
+    has_accounting = "rewarddebt" in compact or "claimed" in compact or "pending" in compact
+    return "tokenids.length" in compact and owns_token_check and caller_payout and has_accounting
 
 
 def is_user_funded_redemption_flow(block: FunctionBlock) -> bool:
@@ -2918,11 +2821,9 @@ def scan_solidity_file(
         }
         has_access_control = solidity_has_access_control(block)
         has_self_guard = solidity_has_self_accounting_guard(block)
+        function_parameter_names_in_scope = function_parameter_names(block.header)
         payout_or_request_bound = is_payout_or_request_bound(body)
         fixed_recipient_flow = is_fixed_recipient_money_flow(block)
-        fixed_recipient_stream_claim = is_fixed_recipient_stream_claim_flow(block, text)
-        fixed_recipient_stream_sweep = is_fixed_recipient_stream_sweep_flow(block, text)
-        paramless_stream_initializer = is_paramless_stream_initializer(block, text)
         cost_bound_payout = is_cost_bound_payout(block)
         inbound_deposit_flow = is_inbound_deposit_flow(block)
         inbound_transfer_only_flow = is_inbound_transfer_only_flow(block)
@@ -3020,8 +2921,6 @@ def scan_solidity_file(
         view_or_pure = is_view_or_pure_function(block)
         plain_storage_setter = is_plain_storage_setter(block)
         plain_storage_getter = is_plain_storage_getter(block)
-        critical_address_update = critical_address_assignment(block)
-        address_parameter_routes = transfer_routes_to_address_parameter(block)
         self_scoped_config = is_self_scoped_operator_or_metadata_config(block)
         low_priority_config = is_low_priority_public_config(block)
         keeper_incentive_flow = is_keeper_incentive_flow(block)
@@ -3030,32 +2929,17 @@ def scan_solidity_file(
         game_or_round_settlement_flow = is_game_or_round_settlement_flow(block)
         eoa_origin_only = tx_origin_is_eoa_gate_or_event(block)
         hook_tx_origin_attribution = tx_origin_is_hook_attribution(block, path_label)
-        address_parameter_route_guarded = any(
-            (
-                has_access_control,
-                has_self_guard,
-                payout_or_request_bound,
-                entrypoint_or_message_gated,
-                secret_or_commitment_gated_flow,
-                notary_commitment_flow,
-                cost_bound_payout,
-                recipient_or_approved_withdrawal,
-                user_funded_launchpad_flow,
-                user_funded_redemption_flow,
-                swap_aggregator_user_flow,
-                keeper_incentive_flow,
-                debt_backed_liquidation_flow,
-                game_or_round_settlement_flow,
-            )
-        )
+        merkle_distributor_claim = is_merkle_distributor_claim(block)
+        expired_order_cleanup = is_permissionless_expired_order_cleanup(block)
+        claim_to_token_owner_flow = is_claim_to_token_owner_flow(block, text)
+        reserved_dust_sweep = is_reserved_dust_sweep(block)
+        caller_bounded_claim_loop = is_caller_bounded_claim_loop(block)
+        access_controlled_external_transfer = has_access_control and solidity_has_external_transfer(body)
         has_money_guard = has_access_control or (
             (has_self_guard or payout_or_request_bound) and not requires_admin_guard(block.name)
         ) or any(
             (
                 fixed_recipient_flow,
-                fixed_recipient_stream_claim,
-                fixed_recipient_stream_sweep,
-                bool(address_parameter_routes),
                 cost_bound_payout,
                 inbound_deposit_flow,
                 inbound_transfer_only_flow,
@@ -3071,6 +2955,11 @@ def scan_solidity_file(
                 debt_backed_liquidation_flow,
                 user_funded_redemption_flow,
                 game_or_round_settlement_flow,
+                merkle_distributor_claim,
+                expired_order_cleanup,
+                claim_to_token_owner_flow,
+                reserved_dust_sweep,
+                caller_bounded_claim_loop,
                 payment_splitter_release,
                 vault_allowance_bookkeeping,
                 vault_allowance_guarded_transfer,
@@ -3109,106 +2998,6 @@ def scan_solidity_file(
                 safu_presale_cancel_guarded,
             )
         )
-
-        if (
-            public_like
-            and critical_address_update
-            and name_lower != "constructor"
-            and not view_or_pure
-            and not is_standard_token_function(block.name)
-        ):
-            line_no, field, evidence = critical_address_update
-            if non_runtime_bundle_source:
-                severity = "low"
-                confidence = "low"
-                funds_at_risk = False
-                signal = "Critical address assignment appears in a non-runtime Sourcify bundle source."
-                manual_check = "Confirm this file is inherited by the deployed runtime before escalating."
-            elif has_access_control:
-                severity = "medium"
-                confidence = "low"
-                funds_at_risk = False
-                signal = f"Guarded function can change critical address `{field}`."
-                manual_check = (
-                    "Confirm the current owner/admin/timelock and whether this address "
-                    "controls withdrawals, oracle pricing, routing, upgrades, or token custody."
-                )
-            else:
-                severity = "critical"
-                confidence = "medium"
-                funds_at_risk = True
-                signal = f"Public/external function can change critical address `{field}` without an obvious guard."
-                manual_check = (
-                    "Read current storage and confirm whether changing this address can "
-                    "redirect funds, swap routes, oracle prices, trusted forwarders, "
-                    "or implementation/admin control."
-                )
-            add_finding(
-                findings,
-                Finding(
-                    severity=severity,
-                    confidence=confidence,
-                    funds_at_risk=funds_at_risk,
-                    category="address-control",
-                    path=path_label,
-                    line=line_no,
-                    function=block.name,
-                    signal=signal,
-                    evidence=evidence,
-                    manual_check=manual_check,
-                ),
-            )
-
-        if (
-            public_like
-            and address_parameter_routes
-            and solidity_has_external_transfer(body)
-            and not view_or_pure
-            and not is_standard_token_function(block.name)
-            and not fixed_recipient_stream_claim
-            and not fixed_recipient_stream_sweep
-            and not recipient_or_approved_withdrawal
-        ):
-            routed = ", ".join(f"`{name}`" for name in address_parameter_routes)
-            if non_runtime_bundle_source:
-                severity = "low"
-                confidence = "low"
-                funds_at_risk = False
-                signal = "Recipient-parameter money route appears in a non-runtime Sourcify bundle source."
-                manual_check = "Confirm runtime reachability before treating this as redirectable custody."
-            elif address_parameter_route_guarded:
-                severity = "medium"
-                confidence = "low"
-                funds_at_risk = False
-                signal = f"Guarded money path can route funds to address parameter {routed}."
-                manual_check = (
-                    "Confirm caller/role/request ownership and whether the authorized caller "
-                    "can redirect protocol or user funds to an arbitrary address."
-                )
-            else:
-                severity = "critical"
-                confidence = "medium"
-                funds_at_risk = True
-                signal = f"Public/external money path can route funds to address parameter {routed}."
-                manual_check = (
-                    "Confirm whether any caller can choose the recipient and transfer "
-                    "contract-held native/token balances or user assets."
-                )
-            add_finding(
-                findings,
-                Finding(
-                    severity=severity,
-                    confidence=confidence,
-                    funds_at_risk=funds_at_risk,
-                    category="address-control",
-                    path=path_label,
-                    line=block.start_line,
-                    function=block.name,
-                    signal=signal,
-                    evidence=block.header,
-                    manual_check=manual_check,
-                ),
-            )
 
         if (
             public_like
@@ -3272,34 +3061,9 @@ def scan_solidity_file(
                 ),
             )
 
-        if public_like and (fixed_recipient_stream_claim or fixed_recipient_stream_sweep):
-            add_finding(
-                findings,
-                Finding(
-                    severity="medium" if fixed_recipient_stream_sweep else "low",
-                    confidence="low",
-                    funds_at_risk=False,
-                    category="access-control",
-                    path=path_label,
-                    line=block.start_line,
-                    function=block.name,
-                    signal=(
-                        "Public stream sweep sends remaining funds to a fixed return address after stream conditions."
-                        if fixed_recipient_stream_sweep
-                        else "Public claim sends accrued funds to a fixed recipient, not the caller."
-                    ),
-                    evidence=block.header,
-                    manual_check=(
-                        "Confirm runtime recipient/return address, stream end/cooldown state, "
-                        "and whether any caller can redirect funds to themselves."
-                    ),
-                ),
-            )
-
         if (
             public_like
             and admin_path
-            and not critical_address_update
             and not has_access_control
             and not view_or_pure
             and not is_standard_token_function(block.name)
@@ -3500,25 +3264,15 @@ def scan_solidity_file(
                         "Read factory/token0/token1/reserves or slot0 before escalating "
                         "as an uninitialized pool."
                     )
-                elif paramless_stream_initializer:
-                    if precheck_stream_initializer_consumed(precheck_state):
-                        severity = "low"
-                        confidence = "low"
-                        funds_at_risk = False
-                        signal = "Paramless stream initializer is already consumed by read-only stream-state precheck."
-                        manual_check = (
-                            "startTimestamp/lastClaimTimestamp or initialized getter is nonzero; "
-                            "keep as checked stream-initializer signal unless another path can reset state."
-                        )
-                    else:
-                        severity = "medium"
-                        confidence = "low"
-                        funds_at_risk = False
-                        signal = "Paramless stream initializer appears to set timestamp/state only."
-                        manual_check = (
-                            "Call startTimestamp()/initialized() read-only and confirm no recipient, "
-                            "token, owner, or return address can be set by the caller."
-                        )
+                elif has_initializer_guard_markers(block):
+                    severity = "medium"
+                    confidence = "low"
+                    funds_at_risk = money_path
+                    signal = "Initializer appears to include explicit one-shot state-guard logic."
+                    manual_check = (
+                        "Verify whether state guard can be reset (proxy storage upgrades, "
+                        "admin migration, or delegatecall) before downgrading."
+                    )
                 elif non_runtime_bundle_source:
                     severity = "low"
                     confidence = "low"
@@ -3567,6 +3321,12 @@ def scan_solidity_file(
             or opyn_otoken_user_flow
             or layerzero_readlib_fee_or_verification_flow
             or safu_presale_liquidity_flow
+            or access_controlled_external_transfer
+            or merkle_distributor_claim
+            or expired_order_cleanup
+            or claim_to_token_owner_flow
+            or reserved_dust_sweep
+            or caller_bounded_claim_loop
         ):
             guarded = solidity_has_reentrancy_guard(block)
             transfer_kind = solidity_transfer_kind_at_line(block, transfer_line)
@@ -3626,6 +3386,9 @@ def scan_solidity_file(
 
         if ".delegatecall" in body:
             arbitrary = re.search(r"delegatecall\s*\([^)]*(target|to|addr|implementation)", body)
+            delegate_target_user_controlled = is_function_call_with_user_controlled_argument(
+                block.lines, "delegatecall", function_parameter_names_in_scope
+            )
             if scheduled_upgrade_executor:
                 delegate_severity = "medium"
                 delegate_confidence = "low"
@@ -3704,6 +3467,15 @@ def scan_solidity_file(
                 delegate_funds = False
                 delegate_signal = "delegatecall appears in a non-runtime Sourcify bundle source."
                 delegate_manual = "Confirm runtime reachability before escalating delegatecall risk."
+            elif not delegate_target_user_controlled and not arbitrary:
+                delegate_severity = "low"
+                delegate_confidence = "low"
+                delegate_funds = False
+                delegate_signal = "delegatecall target appears fixed/non-user supplied and guarded by surrounding context."
+                delegate_manual = (
+                    "Confirm the fixed target cannot be changed by owner/admin upgrade "
+                    "storage before excluding this from funds-at-risk queue."
+                )
             else:
                 delegate_severity = "critical" if public_like and arbitrary else "high"
                 delegate_confidence = "medium"
@@ -3772,6 +3544,15 @@ def scan_solidity_file(
                     "Keep as a composability/phishing watchlist signal unless tx.origin "
                     "controls ownership, withdrawal authorization, or recipient choice."
                 )
+            elif view_or_pure:
+                severity = "low"
+                confidence = "low"
+                funds_at_risk = False
+                signal = "tx.origin appears in a view/pure context without custody writes."
+                manual_check = (
+                    "Keep as a non-custody composition signal unless external authorization "
+                    "or withdrawals depend on tx.origin."
+                )
             elif has_access_control and (
                 swap_aggregator_user_flow
                 or "isowner" in block.header.lower()
@@ -3826,8 +3607,6 @@ def scan_solidity_file(
                 non_runtime_bundle_source
                 or standard_amm_function
                 or recipient_or_approved_withdrawal
-                or fixed_recipient_stream_claim
-                or fixed_recipient_stream_sweep
                 or user_funded_launchpad_flow
                 or hook_fee_callback_flow
                 or tax_or_router_maintenance_swap
@@ -3888,8 +3667,6 @@ def scan_solidity_file(
             token_transfer_guarded = (
                 has_money_guard
                 or fixed_recipient_flow
-                or fixed_recipient_stream_claim
-                or fixed_recipient_stream_sweep
                 or cost_bound_payout
                 or inbound_deposit_flow
                 or inbound_transfer_only_flow
@@ -4042,8 +3819,6 @@ def scan_solidity_file(
             view_or_pure
             or plain_storage_getter
             or fixed_recipient_flow
-            or fixed_recipient_stream_claim
-            or fixed_recipient_stream_sweep
             or keeper_incentive_flow
             or debt_backed_liquidation_flow
             or user_funded_redemption_flow
@@ -4071,6 +3846,10 @@ def scan_solidity_file(
             or safu_presale_liquidity_flow
             or user_paid_mint_loop
             or bounded_internal_money_loop
+            or expired_order_cleanup
+            or claim_to_token_owner_flow
+            or reserved_dust_sweep
+            or caller_bounded_claim_loop
         ):
             add_finding(
                 findings,
@@ -4137,8 +3916,6 @@ def scan_solidity_file(
             and not standard_amm_source
             and not (
                 fixed_recipient_flow
-                or fixed_recipient_stream_claim
-                or fixed_recipient_stream_sweep
                 or cost_bound_payout
                 or inbound_deposit_flow
                 or inbound_transfer_only_flow
@@ -4243,7 +4020,7 @@ def low_level_call_primary_kind(lines: list[tuple[int, str]]) -> str | None:
         if "require(" in clean or "if (" in clean or "assert(" in clean:
             continue
         result_name = extract_call_result_name(clean)
-        if result_name and call_result_checked(lines[index + 1 : index + 5], result_name):
+        if result_name and call_result_checked(lines[index + 1 : index + 12], result_name):
             continue
         if ".send(" in clean:
             return "native-stipend"
@@ -4325,6 +4102,27 @@ def extract_first_call_arguments(line: str, name: str) -> str | None:
             if depth == 0:
                 return line[start:index]
     return None
+
+
+def split_top_level_arguments(argument_text: str) -> list[str]:
+    if not argument_text:
+        return []
+    normalized = argument_text.strip()
+    if not normalized:
+        return []
+    depth = 0
+    start = 0
+    arguments: list[str] = []
+    for index, char in enumerate(normalized):
+        if char in "([{":
+            depth += 1
+        elif char in ")]}":
+            depth = max(0, depth - 1)
+        elif char == "," and depth == 0:
+            arguments.append(normalized[start:index])
+            start = index + 1
+    arguments.append(normalized[start:])
+    return [arg.strip() for arg in arguments if arg is not None]
 
 
 def count_top_level_arguments(argument_text: str) -> int:

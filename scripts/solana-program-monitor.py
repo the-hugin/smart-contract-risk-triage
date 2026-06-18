@@ -26,27 +26,17 @@ BPF_UPGRADEABLE_LOADER = "BPFLoaderUpgradeab1e11111111111111111111111"
 PRIVATE_TELEGRAM_CHAT_RE = re.compile(r"^[1-9][0-9]*$")
 PUBKEY_RE = re.compile(r"^[1-9A-HJ-NP-Za-km-z]{32,44}$")
 ALERT_TRIAGE_CLASSES = {"review", "triage-now"}
+ALERT_EVENT_TYPES = {"setAuthority", "setAuthorityChecked"}
 MONITORED_EVENT_TYPES = {"deployWithMaxDataLen", "upgrade", "setAuthority", "setAuthorityChecked", "close"}
 LAMPORTS_PER_SOL = 1_000_000_000
-NATIVE_SOL_VALUE_THRESHOLD = 7.4
-STABLE_VALUE_THRESHOLD = 500.0
 BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
 BASE58_INDEX = {char: index for index, char in enumerate(BASE58_ALPHABET)}
 ED25519_P = 2**255 - 19
 ED25519_D = (-121665 * pow(121666, -1, ED25519_P)) % ED25519_P
 KNOWN_VALUE_MINTS = {
-    "So11111111111111111111111111111111111111112": {
-        "symbol": "WSOL",
-        "threshold": NATIVE_SOL_VALUE_THRESHOLD,
-    },
-    "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v": {
-        "symbol": "USDC",
-        "threshold": STABLE_VALUE_THRESHOLD,
-    },
-    "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY7j2X5X3Z8f9jJ": {
-        "symbol": "USDT",
-        "threshold": STABLE_VALUE_THRESHOLD,
-    },
+    "So11111111111111111111111111111111111111112": {"symbol": "WSOL", "threshold": 5.0},
+    "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v": {"symbol": "USDC", "threshold": 8250.0},
+    "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY7j2X5X3Z8f9jJ": {"symbol": "USDT", "threshold": 8250.0},
 }
 
 
@@ -169,7 +159,7 @@ def rpc_request(args: argparse.Namespace, method: str, params: list[Any]) -> Any
             headers={
                 "Accept": "application/json",
                 "Content-Type": "application/json",
-                "User-Agent": "smart-contract-risk-triage-solana-monitor/0.2",
+                "User-Agent": "smart-contract-risk-triage-solana-monitor/1.0",
             },
             method="POST",
         )
@@ -212,7 +202,7 @@ def rpc_batch_request(args: argparse.Namespace, calls: list[tuple[str, list[Any]
             headers={
                 "Accept": "application/json",
                 "Content-Type": "application/json",
-                "User-Agent": "smart-contract-risk-triage-solana-monitor/0.2",
+                "User-Agent": "smart-contract-risk-triage-solana-monitor/1.0",
             },
             method="POST",
         )
@@ -553,13 +543,13 @@ def classified_value_signals(summary: dict[str, Any]) -> tuple[list[dict[str, An
         ("maxWritableNonSignerDeltaSol", "maxWritableNonSignerDeltaSolAccount", "writable_non_signer_delta"),
     ]:
         amount = float(summary.get(amount_key) or 0.0)
-        if amount < NATIVE_SOL_VALUE_THRESHOLD:
+        if amount < 5.0:
             continue
         signal = {
             "asset": "SOL",
             "reason": reason,
             "amount": summary[amount_key],
-            "threshold": NATIVE_SOL_VALUE_THRESHOLD,
+            "threshold": 5.0,
             "account": summary.get(account_key),
             "accountIsOnCurve": is_solana_on_curve(str(summary.get(account_key) or "")),
         }
@@ -716,6 +706,14 @@ def apply_value_classification(event: dict[str, Any], args: argparse.Namespace) 
         event["triageClass"] = "triage-now" if direct_signal_count else "watch"
         event["severity"] = "high" if direct_signal_count else "low"
         event["valueSignalStrength"] = "direct" if direct_signal_count else "weak_off_curve_token_context"
+    elif event_type == "close":
+        event["triageClass"] = "watch"
+        event["severity"] = "low"
+        event["valueSignalStrength"] = (
+            "close_value_proximity_unconfirmed"
+            if direct_signal_count
+            else "weak_off_curve_token_context"
+        )
     elif str(event.get("triageClass") or "") == "watch":
         event["triageClass"] = "review"
         event["severity"] = "medium"
@@ -793,7 +791,7 @@ def event_from_instruction(
         program_data = {}
     triage_class = "watch"
     severity = "low"
-    if event_type in {"setAuthority", "setAuthorityChecked"} and authority and program_id:
+    if event_type in {"setAuthority", "setAuthorityChecked"} and authority:
         triage_class = "review"
         severity = "medium"
     elif event_type == "deployWithMaxDataLen" and args.alert_deploys and authority:
@@ -904,34 +902,40 @@ def alert_key(row: dict[str, Any]) -> str:
     return "|".join(fields)
 
 
-def is_alertable_event(row: dict[str, Any]) -> bool:
-    if str(row.get("triageClass") or "") not in ALERT_TRIAGE_CLASSES:
-        return False
-    event_type = str(row.get("eventType") or "")
-    if event_type in {"setAuthority", "setAuthorityChecked"}:
-        return bool(row.get("programId") or row.get("programDataAccount"))
-    return True
-
-
 def alert_rows(events: list[dict[str, Any]], limit: int) -> list[dict[str, Any]]:
     rows = [
         row
         for row in events
-        if is_alertable_event(row)
+        if (
+            str(row.get("triageClass") or "") in ALERT_TRIAGE_CLASSES
+            and (
+                str(row.get("eventType") or "") not in ALERT_EVENT_TYPES
+                or bool(row.get("programId") or row.get("programDataAccount"))
+            )
+        )
+        or (
+            str(row.get("eventType") or "") in ALERT_EVENT_TYPES
+            and bool(row.get("programId") or row.get("programDataAccount"))
+        )
     ]
     return rows[: max(1, limit)]
 
 
+def compact(value: Any, limit: int = 120) -> str:
+    text = " ".join(str(value or "").split())
+    if len(text) <= limit:
+        return text
+    return text[: limit - 3].rstrip(" ,.;:-") + "..."
+
+
 def format_alert_message(rows: list[dict[str, Any]], event: dict[str, Any]) -> str:
     lines = [
-        "Smart-contract alert",
+        "Smart-contract alert: action needed",
         "Network: Solana",
-        f"Status: {event.get('status')}",
-        f"New loader signatures: {event.get('newSignatureCount')}; events: {event.get('eventCount')}",
-        "Boundary: passive RPC/source triage only. No transaction or exploit was run.",
+        f"Batch: signatures={event.get('newSignatureCount')} events={event.get('eventCount')} alert_rows={len(rows)}",
     ]
     if event.get("cursorSkipped"):
-        lines.append("Cursor: previous cursor was outside the bounded window; older loader signatures were skipped.")
+        lines.append("Cursor: previous cursor outside bounded window; older signatures skipped.")
     for index, row in enumerate(rows, start=1):
         value_map = row.get("valueMap") if isinstance(row.get("valueMap"), dict) else {}
         value_signals = value_map.get("valueSignals") if isinstance(value_map.get("valueSignals"), list) else []
@@ -944,15 +948,21 @@ def format_alert_message(rows: list[dict[str, Any]], event: dict[str, Any]) -> s
         lines.extend(
             [
                 "",
-                f"{index}. {row.get('triageClass')} / {row.get('severity')}",
-                f"Event: {row.get('eventType')}",
-                f"Program: {row.get('programId') or '-'}",
-                f"ProgramData: {row.get('programDataAccount') or '-'}",
-                f"Authority: {row.get('authority') or '-'}",
-                f"Value signals: {value_text}",
-                f"Signature: {row.get('signature')}",
+                f"{index}. {str(row.get('triageClass') or 'review').upper()} / {row.get('severity')}",
+                f"Event: {row.get('eventType')} | strength={row.get('valueSignalStrength') or 'n/a'}",
+                f"Program: {compact(row.get('programId') or '-')}",
+                f"ProgramData: {compact(row.get('programDataAccount') or '-')}",
+                f"Authority: {compact(row.get('authority') or '-')}",
+                f"Value: {compact(value_text, 180)}",
+                f"Signature: {compact(row.get('signature'), 90)}",
             ]
         )
+    lines.extend(
+        [
+            "",
+            "Boundary: passive RPC/source triage only. No transaction or exploit was run.",
+        ]
+    )
     return "\n".join(lines)
 
 
